@@ -1,3 +1,17 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
 
+# Raw EdNet files are too large for GitHub: download them (see README)
+data/raw/
+data/synthetic/
+data/feedback.db
+
+# Checkpoints stay local; the small .npy files for the app are committed in Week 3
+artifacts/*.pt
+
+# Course papers stay local (copyright, clone size)
 RecSys Papers-20261106/
 Papers summary copy.pdf
