@@ -15,3 +15,5 @@ artifacts/*.pt
 # Course papers stay local (copyright, clone size)
 RecSys Papers-20261106/
 Papers summary copy.pdf
+
+data/processed/events.parquet

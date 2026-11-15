@@ -6,7 +6,7 @@ Team: Grégoire Champourlier, Maxence Simonet, Hippolyte Nussbaumer, Dan Waintra
 
 **Status (Week 2):** data pipeline, model forward pass, evaluation harness and a mock API are in place. Training, real predictions and the Streamlit interface come in Week 3.
 
-## Run the API (Python 3.11)
+## Run the API (Python 3.11 to 3.14)
 
 ```bash
 git clone <repo> && cd <repo>

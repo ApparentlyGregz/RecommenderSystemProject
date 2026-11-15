@@ -1,0 +1,31 @@
+Week 2 evidence - commit 3780abf - 2026-11-15 15:45
+
+Q1 DATA - processed sample (data/processed/stats.json)
+  students: 5000
+  answers: 7068376
+  events_answer_x_topic: 16955196
+  topics: 188
+  questions_seen: 12268
+  answers_per_student_median: 879.0
+  overall_error_rate: 0.32175704642576686
+  parquet_mb: 90.16
+  seconds: 98.5
+  test window: {"students_with_labels": 5000, "eligible_students": 4988, "median_candidates": 58.0, "share_more_than_20_candidates": 0.9921812349639134, "share_failed_candidates_old": 0.1759178908332657, "students_with_old_failed_topic": 3480, "graph_edges": 562306}
+
+Q2 MODEL - one forward pass of NLGCL + forgetting on the train cut
+  graph: 5000 students, 188 topics, 498,785 edges
+  embeddings: students (5000, 64), topics (188, 64), layers 3
+  loss: {'total': 4.3903, 'bpr': 0.6931, 'contrastive': 73941.75, 'l2': 0.5263}
+  gradients finite: True; forward + backward in 2.71s
+
+Q3 EVALUATION - harness on mock predictions, then baselines (test cut)
+  mock predictions: {'ndcg@10': 0.574, 'recall@20': 0.3792, 'recall@5': 0.0947, 'recall@10_old': 0.187, 'students': 4988, 'students_old': 3480}
+                    model  ndcg@10  recall@20  recall@5  recall@10_old  students  students_old
+random (mean of 10 seeds)   0.5747     0.3804    0.0954         0.1864 4988.0000     3480.0000
+             global_error   0.5771     0.3808    0.0965         0.3006 4988.0000     3480.0000
+           personal_error   0.6145     0.3984    0.1026         0.2733 4988.0000     3480.0000
+
+Q4 SYSTEM - FastAPI returns mock recommendations and logs a click in SQLite
+  GET /recommend?student_id=1&k=3 -> {"student_id": 1, "mode": "mock", "recommendations": [{"rank": 1, "topic": 186, "label": "Topic 186", "risk": 0.999, "reason": "Mock score: the trained model is plugged in Week 3."}, {"rank": 2, "topic": 108, "label": "Topic 108", "risk": 0.996, "reason": "Mock score: the trained model is plugged in Week 3."}, {"rank": 3, "topic": 169, "label": "Topic 169", "risk": 0.988, "reason": "Mock score: the trained model is plugged in Week 3."}]}
+  POST /log_interaction -> {"id": 1, "student_id": 1, "topic": 52, "action": "revised", "created_at": "2026-11-15T13:45:37.538Z"}
+  rows in SQLite for student 1: 1

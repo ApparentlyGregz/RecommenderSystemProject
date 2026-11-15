@@ -54,7 +54,7 @@ def q2_model(events: pd.DataFrame, n_users: int, n_topics: int) -> None:
     grads_ok = all(torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None)
     print(f"  graph: {n_users} students, {n_topics} topics, {len(cut.edge_user):,} edges")
     print(f"  embeddings: students {tuple(u_emb.shape)}, topics {tuple(t_emb.shape)}, layers {len(layers)}")
-    print("  loss:", {k: round(float(v), 4) for k, v in out.items()})
+    print("  loss:", {k: round(float(v.detach()), 4) for k, v in out.items()})
     print(f"  gradients finite: {grads_ok}; forward + backward in {time.time() - start:.2f}s")
 
 

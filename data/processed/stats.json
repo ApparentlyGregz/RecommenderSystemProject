@@ -1,0 +1,40 @@
+{
+  "students": 5000,
+  "answers": 7068376,
+  "events_answer_x_topic": 16955196,
+  "topics": 188,
+  "questions_seen": 12268,
+  "answers_per_student_median": 879.0,
+  "overall_error_rate": 0.32175704642576686,
+  "parquet_mb": 90.16,
+  "seconds": 98.5,
+  "cuts": {
+    "train": {
+      "students_with_labels": 5000,
+      "eligible_students": 4978,
+      "median_candidates": 60.0,
+      "share_more_than_20_candidates": 0.9931699477701889,
+      "share_failed_candidates_old": 0.11938050268063548,
+      "students_with_old_failed_topic": 2757,
+      "graph_edges": 498785
+    },
+    "val": {
+      "students_with_labels": 5000,
+      "eligible_students": 4980,
+      "median_candidates": 59.0,
+      "share_more_than_20_candidates": 0.9911646586345382,
+      "share_failed_candidates_old": 0.1393258426966292,
+      "students_with_old_failed_topic": 3131,
+      "graph_edges": 534614
+    },
+    "test": {
+      "students_with_labels": 5000,
+      "eligible_students": 4988,
+      "median_candidates": 58.0,
+      "share_more_than_20_candidates": 0.9921812349639134,
+      "share_failed_candidates_old": 0.1759178908332657,
+      "students_with_old_failed_topic": 3480,
+      "graph_edges": 562306
+    }
+  }
+}
