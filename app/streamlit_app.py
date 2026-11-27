@@ -68,6 +68,34 @@ def render_question(q: dict) -> None:
             st.markdown(block["content"], unsafe_allow_html=True)
 
 
+def practice_panel(student_id: int, topic: int, label: str) -> None:
+    """One practice question of a notion, its answer choices, and the check that stores the answer."""
+    if "practice_q" not in st.session_state:
+        qs = api_get("/questions", student_id=student_id, topic=topic, n=1)
+        st.session_state.practice_q = qs[0] if qs else None
+    q = st.session_state.practice_q
+    if q is None:
+        st.info(f"No other practice question left for {label} in this session.")
+        return
+    st.markdown(f"**Question {q['question']}** · difficulty {q['difficulty']}/3 · notions: "
+                + ", ".join(t["label"] for t in q["topics"]))
+    render_question(q)
+    text_of = {c["id"]: c["text"] for c in q["choices"]}
+    choice = st.radio("Your answer", list(text_of), index=None, format_func=text_of.get,
+                      key=f"choice-{q['question']}")
+    c1, c2 = st.columns([1, 3])
+    if c1.button("Check my answer", key=f"check-{q['question']}", disabled=choice is None):
+        result = api_post("/answer", json={"student_id": student_id, "question": q["question"], "choice": choice})
+        st.session_state.last_answer = {"result": result, "question": q, "topic": topic, "label": label,
+                                        "chosen": text_of[choice]}
+        for key in ("practice_topic", "practice_label", "practice_q"):
+            st.session_state.pop(key, None)
+        st.rerun()
+    if q["hint"]:
+        with c2.expander("Hint"):
+            st.write(q["hint"])
+
+
 health = api_get("/health")
 n_students = health["students"]
 model = health["model"]
@@ -81,15 +109,16 @@ if st.sidebar.button("🎲 Random student"):
     st.session_state.student = random.randrange(n_students)
 student = st.sidebar.number_input(f"Student (0 to {n_students - 1})", 0, n_students - 1, key="student")
 if st.session_state.get("shown_student") != student:  # new student: close any open question
-    for key in ("practice_topic", "practice_q", "last_answer"):
+    for key in ("practice_topic", "practice_label", "practice_q", "last_answer"):
         st.session_state.pop(key, None)
     st.session_state.shown_student = student
 k = st.sidebar.slider("Notions to show", 5, 20, 10)
 practised_only = st.sidebar.checkbox("Only notions I have already practised", value=False)
 days_ahead = st.sidebar.slider(
     "Revise in … days", 0, 60, 0,
-    help="Moves time forward and recomputes the learned time term. On DBE-KT22 the model learned that the "
-         "notions practised right now are the riskiest (beta < 0), so waiting lowers their priority.")
+    help="Moves time forward and recomputes the learned time term. On DBE-KT22 the model learned beta > 0: "
+         "a notion gets riskier the longer it is not practised (half-life about 7 days), so waiting raises "
+         "the notions you have not practised for a while. Notions never practised keep their learned risk.")
 st.sidebar.divider()
 st.sidebar.caption(f"Model **{model.get('model')}** · epoch {model.get('epoch')} · "
                    f"validation NDCG@10 {model.get('best_val_ndcg@10') or 0:.3f} · API {API}")
@@ -126,7 +155,7 @@ if last:  # correction of the last practice answer, shown here because the ranki
         st.markdown(f"**Your answer to question {q['question']}** ({last['label']}): {last['chosen']}")
         good = [c["text"] for c in q["choices"] if c["id"] in a["correct_choices"]]
         if a["correct"]:
-            st.success("Correct: this notion moves down your list.")
+            st.success("Correct: this notion moves down your list, and can leave it.")
         else:
             st.error(f"Not quite. The correct answer: {' / '.join(good)}. This notion moves up your list.")
         if a["explanation"]:
@@ -134,11 +163,20 @@ if last:  # correction of the last practice answer, shown here because the ranki
         n1, n2 = st.columns(2)
         if n1.button(f"Another question on {last['label']}", type="primary"):
             st.session_state.practice_topic = last["topic"]
+            st.session_state.practice_label = last["label"]
             st.session_state.pop("last_answer")
             st.rerun()
         if n2.button("Close"):
             st.session_state.pop("last_answer")
             st.rerun()
+
+# A notion can leave the list after a right answer: its next question is then shown here, above the list.
+shown = {r["topic"] for r in res["recommendations"]}
+if st.session_state.get("practice_topic") is not None and st.session_state.practice_topic not in shown:
+    with st.container(border=True):
+        practice_label = st.session_state.get("practice_label", "this notion")
+        st.markdown(f"**Practice · {practice_label}** (no longer in your top {k})")
+        practice_panel(int(student), st.session_state.practice_topic, practice_label)
 
 if recs.empty:
     st.info("No notion left: every notion got feedback. Reset the feedback below.")
@@ -159,11 +197,15 @@ else:
                 st.write(r["description"] or "No description in DBE-KT22.")
                 if r["related"]:
                     st.caption("Related notions: " + ", ".join(r["related"]))
-            if health.get("practice") and right.button("📝 Practise this notion", key=f"practise-{r['topic']}",
-                                                       type="primary"):
-                st.session_state.practice_topic = r["topic"]
-                st.session_state.pop("practice_q", None)
-                st.session_state.pop("last_answer", None)
+            if health.get("practice") and r.get("practice_questions", 0) > 0:
+                if right.button("📝 Practise this notion", key=f"practise-{r['topic']}", type="primary"):
+                    st.session_state.practice_topic = r["topic"]
+                    st.session_state.practice_label = r["label"]
+                    st.session_state.pop("practice_q", None)
+                    st.session_state.pop("last_answer", None)
+            elif health.get("practice"):
+                right.caption("No practice question available for this notion: its DBE-KT22 questions need the "
+                              "course worksheet tables, which the dataset does not include (or you answered them all).")
             cols = right.columns(len(ACTIONS))
             for col, (action, label) in zip(cols, ACTIONS.items()):
                 if col.button(label, key=f"{action}-{r['topic']}"):
@@ -171,34 +213,7 @@ else:
                              json={"student_id": int(student), "topic": r["topic"], "action": action})
 
             if st.session_state.get("practice_topic") == r["topic"]:
-                if "practice_q" not in st.session_state:
-                    qs = api_get("/questions", student_id=int(student), topic=r["topic"], n=1)
-                    st.session_state.practice_q = qs[0] if qs else None
-                q = st.session_state.practice_q
-                if q is None:
-                    st.info("You answered every question of this notion in this session.")
-                    continue
-                st.markdown(f"**Question {q['question']}** · difficulty {q['difficulty']}/3 · notions: "
-                            + ", ".join(t["label"] for t in q["topics"]))
-                render_question(q)
-                if q["needs_context"]:
-                    st.warning("This question uses tables from the course worksheet, which DBE-KT22 does not "
-                               "include. It is shown because no self-contained question of this notion is left.")
-                text_of = {c["id"]: c["text"] for c in q["choices"]}
-                choice = st.radio("Your answer", list(text_of), index=None, format_func=text_of.get,
-                                  key=f"choice-{q['question']}")
-                c1, c2 = st.columns([1, 3])
-                if c1.button("Check my answer", key=f"check-{q['question']}", disabled=choice is None):
-                    result = api_post("/answer", json={"student_id": int(student), "question": q["question"],
-                                                       "choice": choice})
-                    st.session_state.last_answer = {"result": result, "question": q, "topic": r["topic"],
-                                                    "label": r["label"], "chosen": text_of[choice]}
-                    for key in ("practice_topic", "practice_q"):
-                        st.session_state.pop(key, None)
-                    st.rerun()
-                if q["hint"]:
-                    with c2.expander("Hint"):
-                        st.write(q["hint"])
+                practice_panel(int(student), r["topic"], r["label"])
 
 # ---------- Feedback stored in the database ----------
 st.subheader("Your feedback (stored in SQLite)")
