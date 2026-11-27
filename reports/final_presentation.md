@@ -42,7 +42,7 @@ All numbers come from the repository after PR #3: `README.md`, `reports/test_res
 2. **Practise** — real exam questions on that notion, corrected instantly
 3. **Adapt** — every answer moves the notion up or down
 
-**Visual:** screenshot of the app (list of notions with “📝 Practise this notion” and an open question).
+**Visual:** screenshot of the app (the ranked list with its highlighted notions, and the practice window open on a question).
 
 **Notes:** Each notion says why it is there: “5 errors in 13 answers; students who fail the same notions as you often fail this one too; one of the hardest notions for every student”. A wrong answer pushes the notion up, a right one pushes it down.
 
@@ -134,13 +134,13 @@ Student answers → student–notion graph → graph recommender (NLGCL + time t
 **On slide:** (keep it almost empty) “Live demo — localhost:8501”
 
 **Demo script (for the presenter, not on the slide), tested on the served model:**
-1. Student 0: answers, error rate, then the list and the stacked bars (graph, difficulty and time part of each score).
+1. Student 0: answers, error rate, then “Why this order”: the three parts of each score (students who fail the same notions, how hard the notion is, time since practice).
 2. Student 480: a different list (Transactions, Read Committed, Unrepeatable Read…), the list is personal. Avoid random students: Projection and Renaming are in almost everyone’s top 5.
-3. Back to student 0, **GRANT** (#3) → “📝 Practise this notion”. Question 179 covers GRANT, DAC and Access Control. Answer wrongly on purpose (know the right answers beforehand; they are not written here because the dataset must not be redistributed): the question opens in a window; the correction and how the list moved show there: DAC #5 → #4, Access Control #9 → #7.
+3. Back to student 0, **GRANT** (#3) → “Practise”. Question 179 covers GRANT, DAC and Access Control. Answer wrongly on purpose (know the right answers beforehand; they are not written here because the dataset must not be redistributed): the question opens in a window; the correction and how the list moved show there: DAC #5 → #4, Access Control #9 → #7.
 4. “Another question on GRANT” (question 181, on GRANT and DAC), answer correctly: the window shows GRANT #3 → #24 and DAC #4 → #25 (they leave the list). “Back to my list”: the list is redrawn and a notification sums up the moves.
 5. Projection, Renaming and Relational Algebra have no practice button: all their questions need the course worksheet tables, which DBE-KT22 does not include. Say it if asked.
 6. Student 525, “Revise in … days” on 30: Data type, REVOKE and Access Control enter the list. For most students (65%) the list does not change, so use this one.
-7. “👍 Already known” on a notion: it leaves the list and the click shows in the SQLite table.
+7. “Already known” under a notion: it leaves the list and the click shows in “Your feedback” at the bottom (stored in SQLite).
 8. API docs at localhost:8000/docs, and the response time shown above the list (about 2 ms).
 9. “Reset my feedback and answers” (or “Reset my N practice answer(s)”) before the next visitor.
 

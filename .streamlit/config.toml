@@ -1,0 +1,55 @@
+# Visual identity of the Révise Malin interface: ink on exam paper, one highlighter.
+# The fonts are served from app/static/fonts (SIL Open Font License) so the demo works offline.
+
+[server]
+enableStaticServing = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#1B2A4A"            # ink: buttons, sliders, focus
+backgroundColor = "#F6F8FB"         # exam paper
+secondaryBackgroundColor = "#EAEFF5"
+textColor = "#1B2A4A"
+borderColor = "#DCE3EC"
+linkColor = "#1B2A4A"
+font = "Figtree, sans-serif"
+headingFont = "Bricolage Grotesque, sans-serif"
+headingFontWeights = [800, 800, 600]
+baseRadius = "0.5rem"
+buttonRadius = "0.5rem"
+showWidgetBorder = true
+chartCategoricalColors = ["#1B2A4A", "#9FB0CC", "#E8B500"]
+
+[[theme.fontFaces]]
+family = "Figtree"
+url = "app/static/fonts/figtree-latin-400-normal.woff2"
+weight = 400
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Figtree"
+url = "app/static/fonts/figtree-latin-700-normal.woff2"
+weight = 700
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Bricolage Grotesque"
+url = "app/static/fonts/bricolage-grotesque-latin-600-normal.woff2"
+weight = 600
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Bricolage Grotesque"
+url = "app/static/fonts/bricolage-grotesque-latin-800-normal.woff2"
+weight = 800
+style = "normal"
+
+[theme.sidebar]
+backgroundColor = "#EDF1F6"
+secondaryBackgroundColor = "#FFFFFF"

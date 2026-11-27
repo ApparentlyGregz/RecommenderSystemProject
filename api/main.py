@@ -168,8 +168,10 @@ def log_interaction(request: Request, item: InteractionIn) -> dict:
 
 @app.get("/interactions/{student_id}")
 def interactions(request: Request, student_id: int) -> list[dict]:
-    """List a student's stored clicks, newest first."""
-    return db.list_interactions(request.app.state.conn, student_id)
+    """List a student's stored clicks, newest first, with the notion's name."""
+    pred = _predictor(request)
+    return [{**row, "label": pred.topic_label(row["topic"])}
+            for row in db.list_interactions(request.app.state.conn, student_id)]
 
 
 @app.delete("/interactions/{student_id}")
