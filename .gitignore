@@ -10,10 +10,13 @@ data/synthetic/
 data/feedback.db
 
 # Checkpoints stay local; the small .npy files for the app are committed in Week 3
-artifacts/*.pt
+artifacts/**/*.pt
 
 # Course papers stay local (copyright, clone size)
 RecSys Papers-20261106/
 Papers summary copy.pdf
 
 data/processed/events.parquet
+
+# DBE-KT22: processed data stays local until the dataset licence allows redistribution
+data/processed/dbe/

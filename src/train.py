@@ -22,7 +22,7 @@ import pandas as pd
 import torch
 
 from src.build_graph import Cut, load_cuts
-from src.config import ARTIFACTS, EVENTS_FILE, SEED, TOPICS_FILE
+from src.config import ARTIFACTS, DATASET, EVENTS_FILE, SEED, TOPICS_FILE
 from src.evaluate import evaluate_scores
 from src.model import GraphTensors, ReviseMalin
 
@@ -63,8 +63,9 @@ def train(args: argparse.Namespace) -> dict:
     model = ReviseMalin(
         n_users, n_topics, dim=args.dim, n_layers=args.layers,
         use_contrastive=not args.no_contrastive, use_forgetting=not args.no_forgetting,
+        use_topic_bias=args.topic_bias, use_prior=args.prior,
     )
-    opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    opt = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr=args.lr)
     history, best, best_state, wait = [], -1.0, None, 0
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     tag = args.tag or ("full" if not (args.no_contrastive or args.no_forgetting) else
@@ -117,12 +118,18 @@ def train(args: argparse.Namespace) -> dict:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Command-line options; defaults follow the NLGCL paper and official config."""
+    """Command-line options; defaults follow the NLGCL paper, then validation per dataset.
+
+    DBE-KT22 has about 6,000 training pairs per epoch (EdNet: 160,000), so it uses
+    smaller batches and a higher learning rate, chosen on validation among
+    lr {1e-3, 5e-3, 2e-2} x batch {512, 4096}.
+    """
+    small = DATASET == "dbe"
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--epochs", type=int, default=200)
-    parser.add_argument("--patience", type=int, default=10)
-    parser.add_argument("--batch", type=int, default=4096)
-    parser.add_argument("--lr", type=float, default=5e-4)
+    parser.add_argument("--epochs", type=int, default=300 if small else 200)
+    parser.add_argument("--patience", type=int, default=25 if small else 10)
+    parser.add_argument("--batch", type=int, default=512 if small else 4096)
+    parser.add_argument("--lr", type=float, default=1e-3 if small else 5e-4)
     parser.add_argument("--dim", type=int, default=64)
     parser.add_argument("--layers", type=int, default=2)
     parser.add_argument("--reg", type=float, default=1e-4)
@@ -130,6 +137,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="weight of the batch-mean contrastive term (best of 1e-5, 1e-4, 1e-3 on validation)")
     parser.add_argument("--no-contrastive", action="store_true")
     parser.add_argument("--no-forgetting", action="store_true")
+    parser.add_argument("--topic-bias", action=argparse.BooleanOptionalAction, default=small,
+                        help="learn a bias per topic, its difficulty (on by default for DBE-KT22: +0.015 val NDCG@10)")
+    parser.add_argument("--prior", action=argparse.BooleanOptionalAction, default=False,
+                        help="add the topic difficulty prior (others' past error rate) with a learned weight")
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--tag", default="")
     return parser.parse_args(argv)

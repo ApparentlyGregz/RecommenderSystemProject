@@ -2,8 +2,13 @@
 
 For each student, a cut is a point in time. Everything strictly before it is
 input (graph edges, time gaps, error rates). The window right after it gives
-the labels: topics attempted and failed (positive) or attempted and always
-correct (negative).
+the labels of the topics attempted in it, with one of two rules (config.LABEL):
+
+- "any_fail": positive if failed at least once in the window (EdNet reports).
+  This grows with how often a topic is shown, so it rewards exposure.
+- "above_mean": positive if the student's error rate on the topic is above their
+  error rate over the whole window. It asks "where is this student weaker than
+  usual?", whatever the number of attempts (DBE-KT22, final results).
 
 Cuts are defined on timestamps, not on row positions, so a bundle of questions
 answered at the same moment is never split between input and label.
@@ -15,7 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from src.config import CUTS, MS_PER_DAY, OLD_TOPIC_DAYS, WINDOW
+from src.config import CUTS, LABEL, MS_PER_DAY, OLD_TOPIC_DAYS, WINDOW
 
 
 @dataclass
@@ -81,7 +86,30 @@ def cut_times(events: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
-def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int) -> Cut:
+def window_labels(window: pd.DataFrame, rule: str = LABEL) -> pd.DataFrame:
+    """Label of each (user, topic) attempted in a label window.
+
+    Args:
+        window: Events of the label window (user, topic, correct, and question for "above_mean").
+        rule: "any_fail" or "above_mean" (see the module docstring).
+
+    Returns:
+        DataFrame with user, topic and fail (0/1).
+    """
+    w = window.assign(fail=1 - window["correct"])
+    if rule == "any_fail":
+        return w.groupby(["user", "topic"])["fail"].max().reset_index()
+    if rule == "above_mean":
+        # The student's error rate over the window counts each answer once, even if it has several topics.
+        key = ["user", "timestamp", "question"] if "question" in w else ["user", "timestamp"]
+        mean = w.drop_duplicates(key).groupby("user")["fail"].mean()
+        rate = w.groupby(["user", "topic"])["fail"].mean().reset_index()
+        rate["fail"] = (rate["fail"] > rate["user"].map(mean) + 1e-9).astype(np.int8)
+        return rate
+    raise ValueError(f"Unknown label rule: {rule}")
+
+
+def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int, rule: str = LABEL) -> Cut:
     """Build inputs and labels for one cut.
 
     Args:
@@ -101,8 +129,22 @@ def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int) -> C
 
     past = events[events["timestamp"] < t_start]
     window = events[(events["timestamp"] >= t_start) & (events["timestamp"] < t_end)]
+    return _cut_from(past, times[name], window, name, n_users, n_topics, rule)
 
-    t_cut = times[name]
+
+def build_history(events: pd.DataFrame, n_users: int, n_topics: int) -> Cut:
+    """Inputs built from every answer, as of each student's last answer (used to serve the app).
+
+    There is no label window: the candidates are empty. Time gaps are measured
+    from the student's last answer, so a demo replays the moment they stopped.
+    """
+    now = events.groupby("user")["timestamp"].max() + 1
+    return _cut_from(events, now, events.iloc[:0], "now", n_users, n_topics, "any_fail")
+
+
+def _cut_from(past: pd.DataFrame, t_cut: pd.Series, window: pd.DataFrame, name: str, n_users: int,
+              n_topics: int, rule: str) -> Cut:
+    """Aggregate the history before each student's cut time and label the window after it."""
     g = past.assign(fail=1 - past["correct"]).groupby(["user", "topic"])
     agg = g.agg(attempts=("fail", "size"), fails=("fail", "sum"), last_ts=("timestamp", "max"))
     agg = agg.reset_index()
@@ -119,7 +161,7 @@ def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int) -> C
     wrong = past[past["correct"] == 0].groupby(["user", "topic"])["timestamp"].max().reset_index()
     edge_dt = (wrong["user"].map(t_cut).to_numpy() - wrong["timestamp"].to_numpy()) / MS_PER_DAY
 
-    lab = window.assign(fail=1 - window["correct"]).groupby(["user", "topic"])["fail"].max().reset_index()
+    lab = window_labels(window, rule) if len(window) else pd.DataFrame({"user": [], "topic": [], "fail": []})
     return Cut(
         name=name,
         n_users=n_users,

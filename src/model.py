@@ -33,6 +33,7 @@ class GraphTensors:
     edge_topic: torch.Tensor
     edge_dt: torch.Tensor
     practice_dt: torch.Tensor
+    topic_prior: torch.Tensor  # standardised logit of each topic's error rate over all students before the cut
 
     @classmethod
     def from_cut(cls, cut: Cut) -> "GraphTensors":
@@ -44,7 +45,21 @@ class GraphTensors:
             edge_topic=torch.as_tensor(cut.edge_topic, dtype=torch.long),
             edge_dt=torch.as_tensor(cut.edge_dt, dtype=torch.float32),
             practice_dt=torch.as_tensor(cut.practice_dt, dtype=torch.float32),
+            topic_prior=torch.as_tensor(difficulty_prior(cut.attempts, cut.fails), dtype=torch.float32),
         )
+
+
+def difficulty_prior(attempts, fails):
+    """Standardised logit of each topic's smoothed error rate, from answers before the cut only.
+
+    It is the same information as the global-error baseline, given to the model as an
+    input. It matters for topics that rarely appear in training labels (late chapters).
+    """
+    import numpy as np
+
+    rate = (np.asarray(fails).sum(0) + 1) / (np.asarray(attempts).sum(0) + 2)
+    logit = np.log(rate / (1 - rate))
+    return (logit - logit.mean()) / max(logit.std(), 1e-6)
 
 
 class ReviseMalin(nn.Module):
@@ -61,6 +76,11 @@ class ReviseMalin(nn.Module):
         cl_alpha: Weight between the student-side and topic-side contrastive terms (0.6).
         init_half_life: Starting half-life in days.
         half_life_bounds: Min and max half-life in days.
+        use_topic_bias: Add a learned bias per topic (its difficulty), as in matrix factorisation.
+            Without it, a dot product must encode difficulty in the embeddings, which fails for
+            topics a student has never practised (most test topics on DBE-KT22).
+        use_prior: Add w * difficulty prior (other students' error rate on the topic before the cut),
+            with w learned. Covers topics that never appear in training labels.
     """
 
     def __init__(
@@ -75,8 +95,13 @@ class ReviseMalin(nn.Module):
         cl_alpha: float = 0.6,
         init_half_life: float = 7.0,
         half_life_bounds: tuple[float, float] = (0.5, 365.0),
+        use_topic_bias: bool = False,
+        use_prior: bool = False,
     ) -> None:
         super().__init__()
+        self.use_topic_bias, self.use_prior = use_topic_bias, use_prior
+        self.topic_bias = nn.Parameter(torch.zeros(n_topics), requires_grad=use_topic_bias)
+        self.prior_weight = nn.Parameter(torch.tensor(0.0), requires_grad=use_prior)
         self.n_users, self.n_topics, self.n_layers = n_users, n_topics, n_layers
         self.use_contrastive, self.use_forgetting = use_contrastive, use_forgetting
         self.cl_temp, self.cl_alpha = cl_temp, cl_alpha
@@ -141,7 +166,7 @@ class ReviseMalin(nn.Module):
     ) -> torch.Tensor:
         """Risk score of (student, topic) pairs: higher = more likely to fail."""
         u_emb, t_emb = emb if emb is not None else self.propagate(g)[:2]
-        dot = (u_emb[users] * t_emb[topics]).sum(-1)
+        dot = (u_emb[users] * t_emb[topics]).sum(-1) + self.topic_bias[topics] + self.prior_weight * g.topic_prior[topics]
         return dot + self.time_term(g, users, topics)
 
     @torch.no_grad()
@@ -150,7 +175,7 @@ class ReviseMalin(nn.Module):
         u_emb, t_emb, _ = self.propagate(g)
         users = torch.arange(g.n_users).repeat_interleave(g.n_topics)
         topics = torch.arange(g.n_topics).repeat(g.n_users)
-        dot = u_emb @ t_emb.T
+        dot = u_emb @ t_emb.T + self.topic_bias + self.prior_weight * g.topic_prior
         return dot + self.time_term(g, users, topics).view(g.n_users, g.n_topics)
 
     def _info_nce(self, view1: torch.Tensor, view2: torch.Tensor) -> torch.Tensor:
@@ -206,6 +231,7 @@ class ReviseMalin(nn.Module):
         bpr = -F.logsigmoid(s_pos - s_neg).mean()
         l2 = (
             self.user_emb(users).pow(2).sum() + self.topic_emb(pos).pow(2).sum() + self.topic_emb(neg).pow(2).sum()
+            + self.topic_bias[pos].pow(2).sum() + self.topic_bias[neg].pow(2).sum()
         ) / (2 * users.shape[0])
         cl = self.contrastive_loss(layers, users, pos) if self.use_contrastive else torch.tensor(0.0)
         total = bpr + cl_reg * cl + reg_weight * l2

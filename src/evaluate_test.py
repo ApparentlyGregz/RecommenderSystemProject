@@ -35,7 +35,7 @@ import pandas as pd
 import torch
 
 from src.build_graph import Cut, build_cut
-from src.config import ARTIFACTS, EVENTS_FILE, ROOT, SEED, TOPICS_FILE
+from src.config import ARTIFACTS, DATASET, EVENTS_FILE, OLD_TOPIC_DAYS, ROOT, SEED, TOPICS_FILE, WINDOW
 from src.evaluate import baseline_scores, bootstrap_gap, evaluate_scores, recent_activity_scores
 from src.model import GraphTensors, ReviseMalin
 
@@ -49,7 +49,7 @@ LABELS = {
     "most_popular": "Most-popular (attempt frequency)",
     "global_error": "Global error rate",
     "personal_error": "Personal error rate",
-    "recent_activity": "Recent activity (answers in the last 100)",
+    "recent_activity": f"Recent activity (answers in the last {WINDOW})",
     "full": "Full model (NLGCL + forgetting)",
     "cl_noforget": "NLGCL, no forgetting",
     "nocl_forget": "LightGCN + forgetting",
@@ -73,8 +73,12 @@ def load_model(path: Path, n_users: int, n_topics: int) -> tuple[str, ReviseMali
     model = ReviseMalin(
         n_users, n_topics, dim=cfg["dim"], n_layers=cfg["layers"],
         use_contrastive=not cfg["no_contrastive"], use_forgetting=not cfg["no_forgetting"],
+        use_topic_bias=cfg.get("topic_bias", False), use_prior=cfg.get("prior", False),
     )
-    model.load_state_dict(ckpt["state"])
+    state = dict(ckpt["state"])
+    state.setdefault("topic_bias", torch.zeros(n_topics))  # checkpoints trained before these terms existed
+    state.setdefault("prior_weight", torch.tensor(0.0))
+    model.load_state_dict(state)
     model.eval()
     return path.stem.removeprefix("model_"), model
 
@@ -173,7 +177,7 @@ def render_markdown(cut_name: str, results: dict[str, dict], model_names: list[s
     lines = [f"# Results on the {cut_name} cut", "", header, ""]
     first = results["random"]
     lines += [f"Eligible students: {int(first['students'])} "
-              f"({int(first['students_old'])} with a failed topic not practised for > 14 days).", ""]
+              f"({int(first['students_old'])} with a failed topic not practised for > {OLD_TOPIC_DAYS:g} days).", ""]
     lines += ["| Model | " + " | ".join(METRICS) + " |", "|---" * (len(METRICS) + 1) + "|"]
     for name in [b for b in BASELINES if b in results] + model_names:
         lines.append(f"| {LABELS.get(name, name)} | " + " | ".join(_fmt(results[name][k]) for k in METRICS) + " |")
@@ -216,7 +220,7 @@ def main() -> None:
     parser.add_argument("--cut", default="test", choices=["val", "test"])
     parser.add_argument("--bootstrap", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=SEED)
-    parser.add_argument("--out-dir", type=Path, default=ROOT / "reports")
+    parser.add_argument("--out-dir", type=Path, default=ROOT / "reports" / ("dbe" if DATASET == "dbe" else ""))
     args = parser.parse_args()
 
     paths = args.models if args.models else sorted(ARTIFACTS.glob("model_*.pt"))
@@ -232,7 +236,7 @@ def main() -> None:
                          key=lambda kv: order.index(kv[0]) if kv[0] in order else len(order)))
     names = list(models)
 
-    results = evaluate_cut(cut, models, extra_baselines={"recent_activity": recent_activity_scores(events, cut)})
+    results = evaluate_cut(cut, models, extra_baselines={"recent_activity": recent_activity_scores(events, cut, window=WINDOW)})
     gaps = gap_rows(results, names, n_boot=args.bootstrap, seed=args.seed)
     floor = sanity_floor(gaps, names)
     params = forgetting_params(models)
