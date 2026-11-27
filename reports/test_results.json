@@ -1,8 +1,8 @@
 {
   "meta": {
     "cut": "test",
-    "commit": "c6a4f28",
-    "date": "2026-11-27 09:17",
+    "commit": "26dc76a",
+    "date": "2026-11-27 09:21",
     "models": {
       "full": "C:\\Users\\marti\\OneDrive\\Documents\\IA\\Inge5\\RecommenderSystemProject\\artifacts\\model_cl_noforget.pt",
       "cl_noforget": "C:\\Users\\marti\\OneDrive\\Documents\\IA\\Inge5\\RecommenderSystemProject\\artifacts\\model_full.pt",
@@ -11,7 +11,7 @@
     },
     "bootstrap": 1000,
     "seed": 42,
-    "seconds": 1.2
+    "seconds": 1.1
   },
   "metrics": {
     "random": {

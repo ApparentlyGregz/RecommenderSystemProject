@@ -1,6 +1,6 @@
 # Results on the test cut
 
-Commit `c6a4f28`, 2026-11-27 09:17. Models: full, cl_noforget, nocl_forget, nocl_noforget. 1000 bootstrap resamples, seed 42.
+Commit `26dc76a`, 2026-11-27 09:21. Models: full, cl_noforget, nocl_forget, nocl_noforget. 1000 bootstrap resamples, seed 42.
 
 Eligible students: 703 (102 with a failed topic not practised for > 14 days).
 
