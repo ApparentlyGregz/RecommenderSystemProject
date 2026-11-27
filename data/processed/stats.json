@@ -1,40 +1,44 @@
 {
-  "students": 5000,
-  "answers": 7068376,
-  "events_answer_x_topic": 16955196,
-  "topics": 188,
-  "questions_seen": 12268,
-  "answers_per_student_median": 879.0,
-  "overall_error_rate": 0.32175704642576686,
-  "parquet_mb": 90.16,
-  "seconds": 98.5,
+  "dataset": "DBE-KT22",
+  "students_in_raw_data": 1264,
+  "answers_in_raw_data": 161953,
+  "students": 718,
+  "answers": 136130,
+  "events_answer_x_topic": 260436,
+  "topics": 93,
+  "questions_seen": 212,
+  "answers_per_student_median": 193.5,
+  "overall_error_rate": 0.23028722544626457,
+  "first_answer": "2019-08-21",
+  "last_answer": "2022-05-15",
+  "seconds": 1.9,
   "cuts": {
     "train": {
-      "students_with_labels": 5000,
-      "eligible_students": 4978,
-      "median_candidates": 60.0,
-      "share_more_than_20_candidates": 0.9931699477701889,
-      "share_failed_candidates_old": 0.11938050268063548,
-      "students_with_old_failed_topic": 2757,
-      "graph_edges": 498785
+      "students_with_labels": 718,
+      "eligible_students": 685,
+      "median_candidates": 14.0,
+      "share_more_than_20_candidates": 0.13138686131386862,
+      "share_failed_candidates_old": 0.07644744238336144,
+      "students_with_old_failed_topic": 191,
+      "graph_edges": 16845
     },
     "val": {
-      "students_with_labels": 5000,
-      "eligible_students": 4980,
-      "median_candidates": 59.0,
-      "share_more_than_20_candidates": 0.9911646586345382,
-      "share_failed_candidates_old": 0.1393258426966292,
-      "students_with_old_failed_topic": 3131,
-      "graph_edges": 534614
+      "students_with_labels": 718,
+      "eligible_students": 708,
+      "median_candidates": 16.0,
+      "share_more_than_20_candidates": 0.08615819209039548,
+      "share_failed_candidates_old": 0.048907229099801316,
+      "students_with_old_failed_topic": 174,
+      "graph_edges": 21104
     },
     "test": {
-      "students_with_labels": 5000,
-      "eligible_students": 4988,
-      "median_candidates": 58.0,
-      "share_more_than_20_candidates": 0.9921812349639134,
-      "share_failed_candidates_old": 0.1759178908332657,
-      "students_with_old_failed_topic": 3480,
-      "graph_edges": 562306
+      "students_with_labels": 718,
+      "eligible_students": 703,
+      "median_candidates": 17.0,
+      "share_more_than_20_candidates": 0.07396870554765292,
+      "share_failed_candidates_old": 0.047470433639947435,
+      "students_with_old_failed_topic": 102,
+      "graph_edges": 25792
     }
   }
 }

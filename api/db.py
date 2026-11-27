@@ -49,3 +49,16 @@ def list_interactions(conn: sqlite3.Connection, student_id: int) -> list[dict]:
         "SELECT * FROM interactions WHERE student_id = ? ORDER BY id DESC", (student_id,)
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def dismissed_topics(conn: sqlite3.Connection, student_id: int) -> set[int]:
+    """Topics the student gave feedback on: they leave the recommendation list."""
+    rows = conn.execute("SELECT DISTINCT topic FROM interactions WHERE student_id = ?", (student_id,)).fetchall()
+    return {int(r["topic"]) for r in rows}
+
+
+def clear_interactions(conn: sqlite3.Connection, student_id: int) -> int:
+    """Delete every click of one student and return how many rows were removed."""
+    cur = conn.execute("DELETE FROM interactions WHERE student_id = ?", (student_id,))
+    conn.commit()
+    return cur.rowcount

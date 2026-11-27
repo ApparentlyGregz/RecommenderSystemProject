@@ -81,6 +81,47 @@ def cut_times(events: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
+def history_inputs(past: pd.DataFrame, t_cut: pd.Series, n_users: int, n_topics: int) -> dict[str, np.ndarray]:
+    """Model inputs computed from the answers before a cut.
+
+    Shared by the evaluation cuts and by the serving export (where the cut is
+    "now", just after each student's last answer).
+
+    Args:
+        past: Events strictly before each student's cut.
+        t_cut: Cut timestamp (ms) per student index.
+        n_users: Number of students.
+        n_topics: Number of topics.
+
+    Returns:
+        Dict with edge_user, edge_topic, edge_dt, practice_dt, attempts and fails (see Cut).
+    """
+    g = past.assign(fail=1 - past["correct"]).groupby(["user", "topic"])
+    agg = g.agg(attempts=("fail", "size"), fails=("fail", "sum"), last_ts=("timestamp", "max"))
+    agg = agg.reset_index()
+    u, t = agg["user"].to_numpy(), agg["topic"].to_numpy()
+    cut_ts = agg["user"].map(t_cut).to_numpy()
+
+    attempts = np.zeros((n_users, n_topics), np.float32)
+    fails = np.zeros((n_users, n_topics), np.float32)
+    practice_dt = np.full((n_users, n_topics), np.nan, np.float32)
+    attempts[u, t] = agg["attempts"].to_numpy()
+    fails[u, t] = agg["fails"].to_numpy()
+    practice_dt[u, t] = (cut_ts - agg["last_ts"].to_numpy()) / MS_PER_DAY
+
+    # One edge per (student, topic) failed at least once, aged by the time since the last error.
+    wrong = past[past["correct"] == 0].groupby(["user", "topic"])["timestamp"].max().reset_index()
+    edge_dt = (wrong["user"].map(t_cut).to_numpy() - wrong["timestamp"].to_numpy()) / MS_PER_DAY
+    return {
+        "edge_user": wrong["user"].to_numpy(np.int64),
+        "edge_topic": wrong["topic"].to_numpy(np.int64),
+        "edge_dt": edge_dt.astype(np.float32),
+        "practice_dt": practice_dt,
+        "attempts": attempts,
+        "fails": fails,
+    }
+
+
 def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int) -> Cut:
     """Build inputs and labels for one cut.
 
@@ -102,34 +143,13 @@ def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int) -> C
     past = events[events["timestamp"] < t_start]
     window = events[(events["timestamp"] >= t_start) & (events["timestamp"] < t_end)]
 
-    t_cut = times[name]
-    g = past.assign(fail=1 - past["correct"]).groupby(["user", "topic"])
-    agg = g.agg(attempts=("fail", "size"), fails=("fail", "sum"), last_ts=("timestamp", "max"))
-    agg = agg.reset_index()
-    u, t = agg["user"].to_numpy(), agg["topic"].to_numpy()
-    cut_ts = agg["user"].map(t_cut).to_numpy()
-
-    attempts = np.zeros((n_users, n_topics), np.float32)
-    fails = np.zeros((n_users, n_topics), np.float32)
-    practice_dt = np.full((n_users, n_topics), np.nan, np.float32)
-    attempts[u, t] = agg["attempts"].to_numpy()
-    fails[u, t] = agg["fails"].to_numpy()
-    practice_dt[u, t] = (cut_ts - agg["last_ts"].to_numpy()) / MS_PER_DAY
-
-    wrong = past[past["correct"] == 0].groupby(["user", "topic"])["timestamp"].max().reset_index()
-    edge_dt = (wrong["user"].map(t_cut).to_numpy() - wrong["timestamp"].to_numpy()) / MS_PER_DAY
-
+    inputs = history_inputs(past, times[name], n_users, n_topics)
     lab = window.assign(fail=1 - window["correct"]).groupby(["user", "topic"])["fail"].max().reset_index()
     return Cut(
         name=name,
         n_users=n_users,
         n_topics=n_topics,
-        edge_user=wrong["user"].to_numpy(np.int64),
-        edge_topic=wrong["topic"].to_numpy(np.int64),
-        edge_dt=edge_dt.astype(np.float32),
-        practice_dt=practice_dt,
-        attempts=attempts,
-        fails=fails,
+        **inputs,
         cand_user=lab["user"].to_numpy(np.int64),
         cand_topic=lab["topic"].to_numpy(np.int64),
         cand_failed=lab["fail"].to_numpy(np.int8),
