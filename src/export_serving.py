@@ -10,6 +10,7 @@ account).
 What is saved in artifacts/serving.npz (under 1 MB, committed to Git):
     user_emb, topic_emb       propagated LightGCN embeddings (float32)
     half_life, beta, unseen   learned forgetting parameters
+    topic_bias                learned difficulty per topic (zeros if the model has none)
     practice_dt               days since each (student, topic) was last practised, NaN if never
     attempts, fails           answers and errors per (student, topic)
     user_id, n_answers        DBE-KT22 student id and number of answers per student
@@ -105,12 +106,14 @@ def main() -> None:
         "best_val_ndcg@10": best_val,
         "use_forgetting": model.use_forgetting,
         "use_contrastive": model.use_contrastive,
+        "use_topic_bias": model.use_topic_bias,
         "exported": time.strftime("%Y-%m-%d %H:%M"),
     }
     arrays = {
         "user_emb": u_emb.numpy().astype(np.float32),
         "topic_emb": t_emb.numpy().astype(np.float32),
         "half_life": half_life.astype(np.float32),
+        "topic_bias": model.topic_bias.detach().numpy().astype(np.float32),
         "beta": np.float32(model.beta.item() if model.use_forgetting else 0.0),
         "unseen": np.float32(model.unseen.item() if model.use_forgetting else 0.0),
         "use_forgetting": np.bool_(model.use_forgetting),

@@ -18,3 +18,9 @@ Papers summary copy.pdf
 
 data/processed/events.parquet
 data/*.log
+
+# DBE-KT22 question text: built locally from the raw files (python -m src.questions), not redistributed
+data/processed/questions.parquet
+data/processed/ednet/
+artifacts/**/*.pt
+artifacts/sweep/

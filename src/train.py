@@ -63,8 +63,9 @@ def train(args: argparse.Namespace) -> dict:
     model = ReviseMalin(
         n_users, n_topics, dim=args.dim, n_layers=args.layers,
         use_contrastive=not args.no_contrastive, use_forgetting=not args.no_forgetting,
+        use_topic_bias=args.topic_bias,
     )
-    opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    opt = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr=args.lr)
     history, best, best_state, wait = [], -1.0, None, 0
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     tag = args.tag or ("full" if not (args.no_contrastive or args.no_forgetting) else
@@ -130,6 +131,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="weight of the batch-mean contrastive term (best of 1e-5, 1e-4, 1e-3 on validation)")
     parser.add_argument("--no-contrastive", action="store_true")
     parser.add_argument("--no-forgetting", action="store_true")
+    parser.add_argument("--topic-bias", action=argparse.BooleanOptionalAction, default=True,
+                        help="learn a bias per topic, its difficulty (chosen on validation; --no-topic-bias to drop it)")
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--tag", default="")
     return parser.parse_args(argv)

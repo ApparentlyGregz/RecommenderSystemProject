@@ -6,6 +6,8 @@ The interface only talks to the FastAPI backend (no model code here):
     GET  /recommend           ranked knowledge components from the trained model
     POST /log_interaction     feedback buttons, stored in SQLite
     GET  /interactions/{id}   stored feedback, DELETE to reset it
+    GET  /questions           a real DBE-KT22 question of a notion (practice mode)
+    POST /answer              checks and stores an answer; it moves the notion in the next ranking
 
 Run (the API must be running):
     streamlit run app/streamlit_app.py
@@ -48,6 +50,24 @@ def api_send(method: str, path: str, **kwargs) -> None:
         st.rerun()
 
 
+def api_post(path: str, **kwargs) -> dict:
+    """POST on the API and return its JSON (no page refresh)."""
+    r = requests.post(f"{API}{path}", timeout=10, **kwargs)
+    if r.status_code != 200:
+        st.error(f"API error {r.status_code}: {r.text}")
+        st.stop()
+    return r.json()
+
+
+def render_question(q: dict) -> None:
+    """Question text from DBE-KT22: HTML blocks as they are, relational algebra as LaTeX."""
+    for block in q["blocks"]:
+        if block["type"] == "latex":
+            st.latex(block["content"])
+        else:
+            st.markdown(block["content"], unsafe_allow_html=True)
+
+
 health = api_get("/health")
 n_students = health["students"]
 model = health["model"]
@@ -60,6 +80,10 @@ if "student" not in st.session_state:
 if st.sidebar.button("🎲 Random student"):
     st.session_state.student = random.randrange(n_students)
 student = st.sidebar.number_input(f"Student (0 to {n_students - 1})", 0, n_students - 1, key="student")
+if st.session_state.get("shown_student") != student:  # new student: close any open question
+    for key in ("practice_topic", "practice_q", "last_answer"):
+        st.session_state.pop(key, None)
+    st.session_state.shown_student = student
 k = st.sidebar.slider("Notions to show", 5, 20, 10)
 practised_only = st.sidebar.checkbox("Only notions I have already practised", value=False)
 days_ahead = st.sidebar.slider(
@@ -91,15 +115,36 @@ with st.expander("History: errors per question difficulty and weakest notions", 
 res = api_get("/recommend", student_id=student, k=k, days_ahead=days_ahead, practised_only=practised_only)
 recs = pd.DataFrame(res["recommendations"])
 st.subheader("Notions to revise first")
-st.caption(f"Ranked by the trained model ({res['model']}: NLGCL graph + learned time term), "
-           f"answered in {res['latency_ms']} ms. Score = graph part (students who fail the same notions) "
-           "+ time part (when you last practised it).")
+st.caption(f"Ranked by the trained model ({res['model']}), answered in {res['latency_ms']} ms. "
+           "Score = graph part (students who fail the same notions) + difficulty of the notion + time part "
+           "(when you last practised it). Practise a notion: each answer moves it, up if wrong, down if right.")
+
+last = st.session_state.get("last_answer")
+if last:  # correction of the last practice answer, shown here because the ranking may have moved the notion
+    with st.container(border=True):
+        a, q = last["result"], last["question"]
+        st.markdown(f"**Your answer to question {q['question']}** ({last['label']}): {last['chosen']}")
+        good = [c["text"] for c in q["choices"] if c["id"] in a["correct_choices"]]
+        if a["correct"]:
+            st.success("Correct: this notion moves down your list.")
+        else:
+            st.error(f"Not quite. The correct answer: {' / '.join(good)}. This notion moves up your list.")
+        if a["explanation"]:
+            st.info(a["explanation"])
+        n1, n2 = st.columns(2)
+        if n1.button(f"Another question on {last['label']}", type="primary"):
+            st.session_state.practice_topic = last["topic"]
+            st.session_state.pop("last_answer")
+            st.rerun()
+        if n2.button("Close"):
+            st.session_state.pop("last_answer")
+            st.rerun()
 
 if recs.empty:
     st.info("No notion left: every notion got feedback. Reset the feedback below.")
 else:
-    chart = recs.set_index("label")[["graph_score", "time_score"]].rename(
-        columns={"graph_score": "Graph (NLGCL)", "time_score": "Time term"})
+    chart = recs.set_index("label")[["graph_score", "difficulty_score", "time_score"]].rename(
+        columns={"graph_score": "Graph (NLGCL)", "difficulty_score": "Difficulty", "time_score": "Time term"})
     st.bar_chart(chart, horizontal=True, stack=True, sort=False)
 
     for r in res["recommendations"]:
@@ -114,19 +159,57 @@ else:
                 st.write(r["description"] or "No description in DBE-KT22.")
                 if r["related"]:
                     st.caption("Related notions: " + ", ".join(r["related"]))
+            if health.get("practice") and right.button("📝 Practise this notion", key=f"practise-{r['topic']}",
+                                                       type="primary"):
+                st.session_state.practice_topic = r["topic"]
+                st.session_state.pop("practice_q", None)
+                st.session_state.pop("last_answer", None)
             cols = right.columns(len(ACTIONS))
             for col, (action, label) in zip(cols, ACTIONS.items()):
                 if col.button(label, key=f"{action}-{r['topic']}"):
                     api_send("POST", "/log_interaction",
                              json={"student_id": int(student), "topic": r["topic"], "action": action})
 
+            if st.session_state.get("practice_topic") == r["topic"]:
+                if "practice_q" not in st.session_state:
+                    qs = api_get("/questions", student_id=int(student), topic=r["topic"], n=1)
+                    st.session_state.practice_q = qs[0] if qs else None
+                q = st.session_state.practice_q
+                if q is None:
+                    st.info("You answered every question of this notion in this session.")
+                    continue
+                st.markdown(f"**Question {q['question']}** · difficulty {q['difficulty']}/3 · notions: "
+                            + ", ".join(t["label"] for t in q["topics"]))
+                render_question(q)
+                if q["needs_context"]:
+                    st.warning("This question uses tables from the course worksheet, which DBE-KT22 does not "
+                               "include. It is shown because no self-contained question of this notion is left.")
+                text_of = {c["id"]: c["text"] for c in q["choices"]}
+                choice = st.radio("Your answer", list(text_of), index=None, format_func=text_of.get,
+                                  key=f"choice-{q['question']}")
+                c1, c2 = st.columns([1, 3])
+                if c1.button("Check my answer", key=f"check-{q['question']}", disabled=choice is None):
+                    result = api_post("/answer", json={"student_id": int(student), "question": q["question"],
+                                                       "choice": choice})
+                    st.session_state.last_answer = {"result": result, "question": q, "topic": r["topic"],
+                                                    "label": r["label"], "chosen": text_of[choice]}
+                    for key in ("practice_topic", "practice_q"):
+                        st.session_state.pop(key, None)
+                    st.rerun()
+                if q["hint"]:
+                    with c2.expander("Hint"):
+                        st.write(q["hint"])
+
 # ---------- Feedback stored in the database ----------
 st.subheader("Your feedback (stored in SQLite)")
 logged = api_get(f"/interactions/{student}")
 if logged:
     st.dataframe(pd.DataFrame(logged)[["created_at", "topic", "action"]], hide_index=True)
-    if st.button("Reset my feedback"):
+    if st.button("Reset my feedback and answers"):
+        requests.delete(f"{API}/answers/{student}", timeout=10)
         api_send("DELETE", f"/interactions/{student}")
 else:
     st.caption("No feedback yet. A notion you give feedback on leaves your list; the clicks are kept "
                "in data/feedback.db as new interactions for the next training.")
+    if res.get("session_answers") and st.button(f"Reset my {res['session_answers']} practice answer(s)"):
+        api_send("DELETE", f"/answers/{student}")

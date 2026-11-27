@@ -1,0 +1,28 @@
+Consider using tensor.detach() first. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\pytorch\torch\csrc\autograd\generated\python_variable_methods.cpp:837.)
+  "median_half_life": float(model.half_life().median()),
+{"epoch": 1, "train_bpr": 0.6922711133956909, "val_bpr": 0.692663848400116, "val_ndcg@10": 0.663875247958887, "beta": -0.001958303153514862, "median_half_life": 7.019321441650391, "seconds": 0.9}
+{"epoch": 2, "train_bpr": 0.6902542738687425, "val_bpr": 0.6921767592430115, "val_ndcg@10": 0.6693839364822172, "beta": -0.0035904410760849714, "median_half_life": 7.038472652435303, "seconds": 0.96}
+{"epoch": 3, "train_bpr": 0.6882251018569583, "val_bpr": 0.6916074156761169, "val_ndcg@10": 0.6778312163433703, "beta": -0.006112564355134964, "median_half_life": 7.052832126617432, "seconds": 1.41}
+{"epoch": 4, "train_bpr": 0.6859317819277445, "val_bpr": 0.6908214092254639, "val_ndcg@10": 0.6922118871241377, "beta": -0.008058980107307434, "median_half_life": 7.059479713439941, "seconds": 1.07}
+{"epoch": 5, "train_bpr": 0.6834983087721325, "val_bpr": 0.6895747780799866, "val_ndcg@10": 0.7072582300945038, "beta": -0.010315758176147938, "median_half_life": 7.078075408935547, "seconds": 1.07}
+{"epoch": 6, "train_bpr": 0.6806973814964294, "val_bpr": 0.6883243322372437, "val_ndcg@10": 0.7203745507131268, "beta": -0.011180943809449673, "median_half_life": 7.100223541259766, "seconds": 0.96}
+{"epoch": 7, "train_bpr": 0.6773198814619155, "val_bpr": 0.6866623163223267, "val_ndcg@10": 0.7365325832206631, "beta": -0.011935942806303501, "median_half_life": 7.080516815185547, "seconds": 1.17}
+{"epoch": 8, "train_bpr": 0.6728128251575288, "val_bpr": 0.6836579442024231, "val_ndcg@10": 0.7573793216857465, "beta": -0.014054607599973679, "median_half_life": 7.060348987579346, "seconds": 0.91}
+{"epoch": 9, "train_bpr": 0.668049176534017, "val_bpr": 0.680142879486084, "val_ndcg@10": 0.7823761172677169, "beta": -0.01662421226501465, "median_half_life": 7.07360315322876, "seconds": 0.91}
+{"epoch": 10, "train_bpr": 0.6624512076377869, "val_bpr": 0.6758837103843689, "val_ndcg@10": 0.7998901530931718, "beta": -0.017511555925011635, "median_half_life": 7.062467098236084, "seconds": 0.89}
+{"epoch": 11, "train_bpr": 0.6550016828945705, "val_bpr": 0.6700176000595093, "val_ndcg@10": 0.8155171109306389, "beta": -0.0195552259683609, "median_half_life": 7.014261722564697, "seconds": 0.93}
+{"epoch": 12, "train_bpr": 0.6463133266993931, "val_bpr": 0.6640977263450623, "val_ndcg@10": 0.8203998841649229, "beta": -0.021923217922449112, "median_half_life": 6.964339733123779, "seconds": 0.91}
+{"epoch": 13, "train_bpr": 0.6362622011275518, "val_bpr": 0.6556811332702637, "val_ndcg@10": 0.8214262472748922, "beta": -0.024073394015431404, "median_half_life": 6.922031402587891, "seconds": 0.91}
+{"epoch": 14, "train_bpr": 0.6254745239303225, "val_bpr": 0.6469945311546326, "val_ndcg@10": 0.8224129327811197, "beta": -0.02449873462319374, "median_half_life": 6.880978584289551, "seconds": 0.89}
+{"epoch": 15, "train_bpr": 0.614268666221982, "val_bpr": 0.6365783214569092, "val_ndcg@10": 0.8210504768701068, "beta": -0.026333166286349297, "median_half_life": 6.8369317054748535, "seconds": 0.93}
+{"epoch": 16, "train_bpr": 0.5993021187328157, "val_bpr": 0.6267580389976501, "val_ndcg@10": 0.8202246327619308, "beta": -0.02728455699980259, "median_half_life": 6.828107833862305, "seconds": 0.89}
+{"epoch": 17, "train_bpr": 0.5856619704337347, "val_bpr": 0.6167342066764832, "val_ndcg@10": 0.8205019636547757, "beta": -0.028236281126737595, "median_half_life": 6.770135879516602, "seconds": 0.93}
+{"epoch": 18, "train_bpr": 0.5747005258287702, "val_bpr": 0.6043474674224854, "val_ndcg@10": 0.8198403115776998, "beta": -0.028406966477632523, "median_half_life": 6.711525917053223, "seconds": 1.01}
+{"epoch": 19, "train_bpr": 0.5612904741650536, "val_bpr": 0.5935998558998108, "val_ndcg@10": 0.8200805304350217, "beta": -0.03140461817383766, "median_half_life": 6.666290283203125, "seconds": 0.93}
+{"epoch": 20, "train_bpr": 0.5467975111234755, "val_bpr": 0.5872719287872314, "val_ndcg@10": 0.8199002846047292, "beta": -0.033489640802145004, "median_half_life": 6.627296447753906, "seconds": 0.92}
+{"epoch": 21, "train_bpr": 0.5350837366921561, "val_bpr": 0.5766383409500122, "val_ndcg@10": 0.8203558762958242, "beta": -0.034519169479608536, "median_half_life": 6.597801685333252, "seconds": 1.01}
+{"epoch": 22, "train_bpr": 0.5224809022176833, "val_bpr": 0.5681073665618896, "val_ndcg@10": 0.8202311511391621, "beta": -0.03409391641616821, "median_half_life": 6.546995639801025, "seconds": 0.91}
+{"epoch": 23, "train_bpr": 0.5099517603715261, "val_bpr": 0.5584314465522766, "val_ndcg@10": 0.8202986950751452, "beta": -0.03339701145887375, "median_half_life": 6.505631923675537, "seconds": 0.91}
+{"epoch": 24, "train_bpr": 0.5008013333593097, "val_bpr": 0.5583983659744263, "val_ndcg@10": 0.8203395448638301, "beta": -0.03260703384876251, "median_half_life": 6.491894721984863, "seconds": 0.96}
+Early stopping at epoch 24, best val NDCG@10 = 0.8224
+{'best_val_ndcg@10': 0.8224129327811197, 'epochs': 24, 'tag': 'full'}

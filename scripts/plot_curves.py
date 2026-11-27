@@ -5,7 +5,8 @@ that, the JSON lines of artifacts/train_<tag>.log. The full model trained with t
 old summed InfoNCE is drawn in dashed gray: it shows the bug the batch mean fixed.
 
 Usage:
-    python scripts/plot_curves.py              ->  reports/figures/training_curves_week3.png
+    python scripts/plot_curves.py              ->  reports/figures/training_curves_week3.png (EdNet)
+    python scripts/plot_curves.py --artifacts artifacts/dbe --out reports/dbe/figures/training_curves.png
     python scripts/plot_curves.py --compact    ->  ..._compact.png, sized for a 7-inch report column
 """
 from __future__ import annotations
@@ -48,10 +49,14 @@ def load(tag: str) -> list[dict] | None:
 
 
 def main() -> None:
+    global ARTIFACTS
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--compact", action="store_true", help="figure sized for a 7-inch report column")
+    parser.add_argument("--artifacts", type=Path, default=ARTIFACTS, help="folder with history_<tag>.json")
+    parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
-    out = OUT.with_name(OUT.stem + "_compact.png") if args.compact else OUT
+    ARTIFACTS = args.artifacts
+    out = args.out.with_name(args.out.stem + "_compact.png") if args.compact else args.out
     size, font, title_font, legend_font, lw, ms = ((7.2, 2.45), 7, 7.5, 6, 1.4, 4.5) if args.compact else \
         ((15, 4.2), 10, 11, 9, 2, 7)
 
