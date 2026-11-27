@@ -136,8 +136,8 @@ Student answers → student–notion graph → graph recommender (NLGCL + time t
 **Demo script (for the presenter, not on the slide), tested on the served model:**
 1. Student 0: answers, error rate, then the list and the stacked bars (graph, difficulty and time part of each score).
 2. Student 480: a different list (Transactions, Read Committed, Unrepeatable Read…), the list is personal. Avoid random students: Projection and Renaming are in almost everyone’s top 5.
-3. Back to student 0, **GRANT** (#3) → “📝 Practise this notion”. Question 179 covers GRANT, DAC and Access Control. Answer wrongly on purpose (know the right answers beforehand; they are not written here because the dataset must not be redistributed): the correction shows above the list, DAC goes from #5 to #4 and Access Control from #9 to #7.
-4. “Another question on GRANT” (question 181, on GRANT and DAC), answer correctly: GRANT and DAC leave the top 10, Access Control rises to #5, SQL Injection and Read Committed come in.
+3. Back to student 0, **GRANT** (#3) → “📝 Practise this notion”. Question 179 covers GRANT, DAC and Access Control. Answer wrongly on purpose (know the right answers beforehand; they are not written here because the dataset must not be redistributed): the question opens in a window; the correction and how the list moved show there: DAC #5 → #4, Access Control #9 → #7.
+4. “Another question on GRANT” (question 181, on GRANT and DAC), answer correctly: the window shows GRANT #3 → #24 and DAC #4 → #25 (they leave the list). “Back to my list”: the list is redrawn and a notification sums up the moves.
 5. Projection, Renaming and Relational Algebra have no practice button: all their questions need the course worksheet tables, which DBE-KT22 does not include. Say it if asked.
 6. Student 525, “Revise in … days” on 30: Data type, REVOKE and Access Control enter the list. For most students (65%) the list does not change, so use this one.
 7. “👍 Already known” on a notion: it leaves the list and the click shows in the SQLite table.
