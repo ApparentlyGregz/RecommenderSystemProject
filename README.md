@@ -29,6 +29,7 @@ pip install -r requirements-train.txt
    Samples 5,000 students with at least 400 answers and writes `data/processed/` (events, topics, stats).
 3. `python -m src.evaluate` checks the harness on mock predictions and prints the baselines on the test cut.
 4. `python -m src.train` trains the full model. Ablations: `--no-forgetting`, `--no-contrastive`, or both.
+   Then `python -m src.evaluate_test` scores every `artifacts/model_*.pt` and the baselines on the test cut, with paired bootstrap intervals, and writes `reports/test_results.md` and `.json`.
 5. `python scripts/check_week2.py` prints the evidence for the Week 2 report into `reports/week2_evidence.txt`.
 6. `pytest` runs the tests (split without leakage, metrics, model, API).
 

@@ -1,0 +1,39 @@
+C:\Users\maxen\OneDrive\Documents\ING5\recommended-systeme\final-project\RecommenderSystemProject\src\model.py:109: UserWarning: Sparse invariant checks are implicitly disabled. Memory errors (e.g. SEGFAULT) will occur when operating on a sparse tensor which violates the invariants, but checks incur performance overhead. To silence this warning, explicitly opt in or out. See `torch.sparse.check_sparse_tensor_invariants.__doc__` for guidance.  (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\aten\src\ATen\Context.cpp:823.)
+  return torch.sparse_coo_tensor(torch.stack([row, col]), norm, (n, n)).coalesce()
+C:\Users\maxen\OneDrive\Documents\ING5\recommended-systeme\final-project\RecommenderSystemProject\src\train.py:93: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\autograd\generated\python_variable_methods.cpp:823.)
+  "beta": float(model.beta),
+{"epoch": 1, "train_bpr": 0.6925775378942489, "val_bpr": 0.6920566558837891, "val_ndcg@10": 0.7482246425883057, "beta": -0.0201756302267313, "median_half_life": 6.924896240234375, "seconds": 147.17}
+{"epoch": 2, "train_bpr": 0.6908327132463455, "val_bpr": 0.6899117231369019, "val_ndcg@10": 0.8136621766992193, "beta": -0.04012588784098625, "median_half_life": 6.839298248291016, "seconds": 182.4}
+{"epoch": 3, "train_bpr": 0.6870094493031502, "val_bpr": 0.6844897270202637, "val_ndcg@10": 0.8295376657356426, "beta": -0.05966838076710701, "median_half_life": 6.719345569610596, "seconds": 157.74}
+{"epoch": 4, "train_bpr": 0.678142873942852, "val_bpr": 0.6725776195526123, "val_ndcg@10": 0.8356596517799246, "beta": -0.07936988025903702, "median_half_life": 6.587519645690918, "seconds": 162.51}
+{"epoch": 5, "train_bpr": 0.6615990549325943, "val_bpr": 0.6536118984222412, "val_ndcg@10": 0.8366919765099993, "beta": -0.09822877496480942, "median_half_life": 6.410060405731201, "seconds": 155.78}
+{"epoch": 6, "train_bpr": 0.6394638404250145, "val_bpr": 0.6318321228027344, "val_ndcg@10": 0.8378802848523812, "beta": -0.1148393303155899, "median_half_life": 6.252311706542969, "seconds": 154.22}
+{"epoch": 7, "train_bpr": 0.6166645750403404, "val_bpr": 0.6129467487335205, "val_ndcg@10": 0.8379520046175447, "beta": -0.12931601703166962, "median_half_life": 6.1137542724609375, "seconds": 120.58}
+{"epoch": 8, "train_bpr": 0.5993333399295807, "val_bpr": 0.6004690527915955, "val_ndcg@10": 0.8383330853630033, "beta": -0.1413710117340088, "median_half_life": 5.972625732421875, "seconds": 122.21}
+{"epoch": 9, "train_bpr": 0.5875604674220085, "val_bpr": 0.5923240184783936, "val_ndcg@10": 0.8382422003120259, "beta": -0.15128207206726074, "median_half_life": 5.859549522399902, "seconds": 128.86}
+{"epoch": 10, "train_bpr": 0.5790133208036423, "val_bpr": 0.587670624256134, "val_ndcg@10": 0.8390289028883949, "beta": -0.15884879231452942, "median_half_life": 5.796902656555176, "seconds": 129.2}
+{"epoch": 11, "train_bpr": 0.5737773641943932, "val_bpr": 0.5858777165412903, "val_ndcg@10": 0.8400402417979707, "beta": -0.16457496583461761, "median_half_life": 5.746146202087402, "seconds": 121.17}
+{"epoch": 12, "train_bpr": 0.5688426926732063, "val_bpr": 0.5818115472793579, "val_ndcg@10": 0.8406296128243128, "beta": -0.16891533136367798, "median_half_life": 5.684337139129639, "seconds": 127.52}
+{"epoch": 13, "train_bpr": 0.565534009039402, "val_bpr": 0.5800289511680603, "val_ndcg@10": 0.8415193553409278, "beta": -0.1732785552740097, "median_half_life": 5.659336566925049, "seconds": 139.79}
+{"epoch": 14, "train_bpr": 0.5614829286932945, "val_bpr": 0.5796226859092712, "val_ndcg@10": 0.8429241683394455, "beta": -0.17656990885734558, "median_half_life": 5.626359939575195, "seconds": 165.03}
+{"epoch": 15, "train_bpr": 0.55831857919693, "val_bpr": 0.578204870223999, "val_ndcg@10": 0.8434051718236655, "beta": -0.17973962426185608, "median_half_life": 5.621621131896973, "seconds": 175.68}
+{"epoch": 16, "train_bpr": 0.5573265850543976, "val_bpr": 0.5777513980865479, "val_ndcg@10": 0.8438893190916611, "beta": -0.18189798295497894, "median_half_life": 5.608547687530518, "seconds": 9929.73}
+{"epoch": 17, "train_bpr": 0.5545558452606201, "val_bpr": 0.5763561129570007, "val_ndcg@10": 0.8450003114651745, "beta": -0.18408602476119995, "median_half_life": 5.5758867263793945, "seconds": 100.48}
+{"epoch": 18, "train_bpr": 0.5529825389385223, "val_bpr": 0.5767662525177002, "val_ndcg@10": 0.8452762470940304, "beta": -0.18499818444252014, "median_half_life": 5.553897380828857, "seconds": 576.76}
+{"epoch": 19, "train_bpr": 0.5505328968167305, "val_bpr": 0.5774673819541931, "val_ndcg@10": 0.8457218528171597, "beta": -0.18574129045009613, "median_half_life": 5.550968170166016, "seconds": 944.28}
+{"epoch": 20, "train_bpr": 0.5481297627091408, "val_bpr": 0.576631486415863, "val_ndcg@10": 0.8460618353020914, "beta": -0.18604476749897003, "median_half_life": 5.552611351013184, "seconds": 993.01}
+{"epoch": 21, "train_bpr": 0.5463803797960282, "val_bpr": 0.5773780345916748, "val_ndcg@10": 0.8459277497803026, "beta": -0.18621553480625153, "median_half_life": 5.539308071136475, "seconds": 1042.65}
+{"epoch": 22, "train_bpr": 0.5450916066765785, "val_bpr": 0.5762588381767273, "val_ndcg@10": 0.8457332250076941, "beta": -0.18672828376293182, "median_half_life": 5.5249714851379395, "seconds": 4346.13}
+{"epoch": 23, "train_bpr": 0.5433327585458756, "val_bpr": 0.5766382813453674, "val_ndcg@10": 0.8456345744231792, "beta": -0.18685409426689148, "median_half_life": 5.5169548988342285, "seconds": 951.7}
+{"epoch": 24, "train_bpr": 0.5418522015213967, "val_bpr": 0.5756499767303467, "val_ndcg@10": 0.8462622794342632, "beta": -0.18648701906204224, "median_half_life": 5.496932506561279, "seconds": 986.37}
+{"epoch": 25, "train_bpr": 0.5395025044679642, "val_bpr": 0.5758206248283386, "val_ndcg@10": 0.8463135036037324, "beta": -0.18616817891597748, "median_half_life": 5.488553524017334, "seconds": 946.99}
+{"epoch": 26, "train_bpr": 0.5393148452043534, "val_bpr": 0.5751677751541138, "val_ndcg@10": 0.8462159077065571, "beta": -0.1849067062139511, "median_half_life": 5.5062127113342285, "seconds": 91.93}
+{"epoch": 27, "train_bpr": 0.5382198452949524, "val_bpr": 0.5744124054908752, "val_ndcg@10": 0.8462917473599275, "beta": -0.1840868443250656, "median_half_life": 5.474708557128906, "seconds": 83.07}
+{"epoch": 28, "train_bpr": 0.5352576777338982, "val_bpr": 0.5760208368301392, "val_ndcg@10": 0.8461690503812564, "beta": -0.18304932117462158, "median_half_life": 5.468877792358398, "seconds": 85.67}
+{"epoch": 29, "train_bpr": 0.5334667876362801, "val_bpr": 0.5758333802223206, "val_ndcg@10": 0.8460945512800501, "beta": -0.18182027339935303, "median_half_life": 5.455461025238037, "seconds": 71.55}
+{"epoch": 30, "train_bpr": 0.5326766416430473, "val_bpr": 0.5763447880744934, "val_ndcg@10": 0.8461432373267974, "beta": -0.18027547001838684, "median_half_life": 5.449720859527588, "seconds": 64.61}
+{"epoch": 31, "train_bpr": 0.5296307235956192, "val_bpr": 0.575685977935791, "val_ndcg@10": 0.8464389143250738, "beta": -0.17907971143722534, "median_half_life": 5.442588806152344, "seconds": 46.22}
+{"epoch": 32, "train_bpr": 0.5289720728993416, "val_bpr": 0.5773675441741943, "val_ndcg@10": 0.8465481603083911, "beta": -0.17723624408245087, "median_half_life": 5.438634872436523, "seconds": 51.89}
+{"epoch": 33, "train_bpr": 0.527820211648941, "val_bpr": 0.5767832398414612, "val_ndcg@10": 0.8464273390735275, "beta": -0.17568320035934448, "median_half_life": 5.43189811706543, "seconds": 49.1}
+{"epoch": 34, "train_bpr": 0.5251214295625687, "val_bpr": 0.5773590207099915, "val_ndcg@10": 0.8467289857617741, "beta": -0.17278611660003662, "median_half_life": 5.40590238571167, "seconds": 46.18}

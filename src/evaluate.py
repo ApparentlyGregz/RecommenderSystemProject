@@ -20,7 +20,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from src.build_graph import Cut, load_cuts
+from src.build_graph import Cut, cut_times, load_cuts
 from src.config import EVENTS_FILE, OLD_TOPIC_DAYS, SEED, TOPICS_FILE
 
 
@@ -52,7 +52,8 @@ def evaluate_scores(scores: np.ndarray, cut: Cut, seed: int = SEED) -> dict:
         seed: Seed of the tie-breaking key.
 
     Returns:
-        Mean metrics, number of students, and per-student arrays (for confidence intervals).
+        Mean metrics, number of students, and per-student arrays (for confidence intervals;
+        recall@10_old only covers students with an old failed topic).
     """
     tie = np.random.default_rng(seed).random(cut.n_topics)
     per = {"ndcg@10": [], "recall@20": [], "recall@5": []}
@@ -71,6 +72,7 @@ def evaluate_scores(scores: np.ndarray, cut: Cut, seed: int = SEED) -> dict:
     out["students"] = len(per["ndcg@10"])
     out["students_old"] = len(old_recall)
     out["per_student"] = {name: np.array(v) for name, v in per.items()}
+    out["per_student"]["recall@10_old"] = np.array(old_recall)  # only students with an old failed topic
     return out
 
 
@@ -79,7 +81,7 @@ def baseline_scores(cut: Cut, name: str, seed: int = SEED) -> np.ndarray:
 
     Args:
         cut: The cut.
-        name: "random", "global_error" (most-popular) or "personal_error".
+        name: "random", "most_popular" (attempt frequency), "global_error" or "personal_error".
         seed: Seed for the random baseline.
 
     Returns:
@@ -88,6 +90,9 @@ def baseline_scores(cut: Cut, name: str, seed: int = SEED) -> np.ndarray:
     shape = (cut.n_users, cut.n_topics)
     if name == "random":
         return np.random.default_rng(seed).random(shape)
+    if name == "most_popular":
+        # Classic most-popular: topics answered most often by all students before the cut.
+        return np.broadcast_to(cut.attempts.sum(0), shape).astype(float).copy()
     global_rate = (cut.fails.sum(0) + 1) / (cut.attempts.sum(0) + 2)
     if name == "global_error":
         return np.broadcast_to(global_rate, shape).copy()
@@ -95,6 +100,24 @@ def baseline_scores(cut: Cut, name: str, seed: int = SEED) -> np.ndarray:
         m = 5.0  # shrink students' own rates towards the global rate when they have few answers
         return (cut.fails + m * global_rate) / (cut.attempts + m)
     raise ValueError(f"Unknown baseline: {name}")
+
+
+def recent_activity_scores(events: pd.DataFrame, cut: Cut, window: int = 100) -> np.ndarray:
+    """Baseline: answers per topic in each student's last `window` answers strictly before the cut.
+
+    It only uses the past, but it captures which topics the student is working on
+    right now. Topics practised a lot are more likely to be failed at least once in
+    the next window, so this is the bar a model must clear to show it learns more
+    than current activity. Ties are broken by the global error rate.
+    """
+    t_cut = events["user"].map(cut_times(events)[cut.name])
+    past = events[events["timestamp"] < t_cut]
+    first = past.groupby("user")["answer_idx"].transform("min")  # answer_idx counts from the end
+    recent = past[past["answer_idx"] < first + window]
+    counts = recent.groupby(["user", "topic"]).size().reset_index(name="n")
+    scores = np.zeros((cut.n_users, cut.n_topics))
+    scores[counts["user"].to_numpy(), counts["topic"].to_numpy()] = counts["n"].to_numpy()
+    return scores + 1e-3 * baseline_scores(cut, "global_error")
 
 
 def bootstrap_gap(a: np.ndarray, b: np.ndarray, n: int = 1000, seed: int = SEED) -> tuple[float, float, float]:
@@ -110,7 +133,7 @@ def run_baselines(cut: Cut, n_random_seeds: int = 10) -> pd.DataFrame:
     rows = []
     rand = [evaluate_scores(baseline_scores(cut, "random", s), cut) for s in range(n_random_seeds)]
     rows.append({"model": f"random (mean of {n_random_seeds} seeds)", **_mean_metrics(rand)})
-    for name in ["global_error", "personal_error"]:
+    for name in ["most_popular", "global_error", "personal_error"]:
         res = evaluate_scores(baseline_scores(cut, name), cut)
         rows.append({"model": name, **{k: v for k, v in res.items() if k != "per_student"}})
     return pd.DataFrame(rows)

@@ -66,6 +66,10 @@ def train(args: argparse.Namespace) -> dict:
     )
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     history, best, best_state, wait = [], -1.0, None, 0
+    ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    tag = args.tag or ("full" if not (args.no_contrastive or args.no_forgetting) else
+                       f"{'nocl' if args.no_contrastive else 'cl'}_{'noforget' if args.no_forgetting else 'forget'}")
+    model_path, history_path = ARTIFACTS / f"model_{tag}.pt", ARTIFACTS / f"history_{tag}.json"
 
     for epoch in range(1, args.epochs + 1):
         start = time.time()
@@ -82,7 +86,7 @@ def train(args: argparse.Namespace) -> dict:
             opt.zero_grad()
             out["total"].backward()
             opt.step()
-            losses.append(float(out["bpr"]))
+            losses.append(float(out["bpr"].detach()))
         model.eval()
         val = evaluate_scores(model.score_all(g_val).numpy(), cuts["val"])
         row = {
@@ -96,9 +100,12 @@ def train(args: argparse.Namespace) -> dict:
         }
         history.append(row)
         print(json.dumps(row))
+        # Save the history every epoch and the model at every new best, so a stopped run loses nothing.
+        history_path.write_text(json.dumps(history, indent=2))
         if row["val_ndcg@10"] > best:
             best, wait = row["val_ndcg@10"], 0
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
+            torch.save({"state": best_state, "config": vars(args), "epoch": epoch}, model_path)
         else:
             wait += 1
             if wait >= args.patience:
@@ -106,11 +113,6 @@ def train(args: argparse.Namespace) -> dict:
                 break
 
     model.load_state_dict(best_state)
-    ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    tag = args.tag or ("full" if not (args.no_contrastive or args.no_forgetting) else
-                       f"{'nocl' if args.no_contrastive else 'cl'}_{'noforget' if args.no_forgetting else 'forget'}")
-    torch.save({"state": model.state_dict(), "config": vars(args)}, ARTIFACTS / f"model_{tag}.pt")
-    (ARTIFACTS / f"history_{tag}.json").write_text(json.dumps(history, indent=2))
     return {"best_val_ndcg@10": best, "epochs": len(history), "tag": tag}
 
 
@@ -124,7 +126,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dim", type=int, default=64)
     parser.add_argument("--layers", type=int, default=2)
     parser.add_argument("--reg", type=float, default=1e-4)
-    parser.add_argument("--cl-reg", type=float, default=5e-5)
+    parser.add_argument("--cl-reg", type=float, default=1e-3,
+                        help="weight of the batch-mean contrastive term (best of 1e-5, 1e-4, 1e-3 on validation)")
     parser.add_argument("--no-contrastive", action="store_true")
     parser.add_argument("--no-forgetting", action="store_true")
     parser.add_argument("--seed", type=int, default=SEED)

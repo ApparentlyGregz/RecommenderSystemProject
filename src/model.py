@@ -154,11 +154,17 @@ class ReviseMalin(nn.Module):
         return dot + self.time_term(g, users, topics).view(g.n_users, g.n_topics)
 
     def _info_nce(self, view1: torch.Tensor, view2: torch.Tensor) -> torch.Tensor:
-        """InfoNCE with in-batch negatives, as in the official NLGCL code."""
+        """InfoNCE with in-batch negatives, averaged over the batch.
+
+        The official NLGCL code sums over the batch. On our graph that made the
+        contrastive gradient about 700x the BPR gradient at initialisation (normalised
+        vectors give large gradients when embeddings are small), so BPR stayed at
+        ln 2 and the ranking never trained. The mean keeps both terms on the same
+        scale whatever the batch size; cl_reg is tuned on validation for this form.
+        """
         v1, v2 = F.normalize(view1, dim=1), F.normalize(view2, dim=1)
-        pos = torch.exp((v1 * v2).sum(1) / self.cl_temp)
-        total = torch.exp(v1 @ v2.T / self.cl_temp).sum(1)
-        return -torch.log(pos / total).sum()
+        logits = v1 @ v2.T / self.cl_temp
+        return -(logits.diagonal() - torch.logsumexp(logits, dim=1)).mean()
 
     def contrastive_loss(self, layers: list[torch.Tensor], users: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
         """NLGCL neighbour-layer loss: a node vs its neighbours at the next layer."""
@@ -178,7 +184,7 @@ class ReviseMalin(nn.Module):
         pos: torch.Tensor,
         neg: torch.Tensor,
         reg_weight: float = 1e-4,
-        cl_reg: float = 5e-5,
+        cl_reg: float = 1e-3,
     ) -> dict[str, torch.Tensor]:
         """BPR + cl_reg * NLGCL contrastive loss + reg_weight * L2.
 
@@ -188,7 +194,8 @@ class ReviseMalin(nn.Module):
             pos: Topic attempted and failed in the label window.
             neg: Topic attempted and always correct in the same window.
             reg_weight: L2 weight (1e-4 in the paper).
-            cl_reg: Contrastive weight (5e-5 in the official config).
+            cl_reg: Weight of the batch-mean contrastive term, chosen on validation
+                (the official 5e-5 applies to a batch sum, i.e. about 0.2 on a mean of 4096).
 
         Returns:
             Dict with total, bpr, contrastive and l2 terms.

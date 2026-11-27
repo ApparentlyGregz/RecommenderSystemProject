@@ -33,7 +33,20 @@ def test_oracle_scores_perfectly(events):
     assert res["ndcg@10"] == pytest.approx(1.0)
 
 
+def test_recent_activity_only_counts_answers_before_the_cut(events):
+    from src.build_graph import cut_times
+    from src.evaluate import recent_activity_scores
+
+    cut = build_cut(events, "test", 3, N_TOPICS)
+    counts = np.floor(recent_activity_scores(events, cut, window=50))
+    start = events["user"].map(cut_times(events)["test"])
+    past = events[events["timestamp"] < start]
+    for u in range(3):
+        last = past[past["user"] == u].nsmallest(50, "answer_idx")
+        assert counts[u].sum() == len(last)  # exactly the 50 answers right before the cut, none after
+
+
 def test_baselines_have_the_right_shape(events):
     cut = build_cut(events, "test", 3, N_TOPICS)
-    for name in ["random", "global_error", "personal_error"]:
+    for name in ["random", "most_popular", "global_error", "personal_error"]:
         assert baseline_scores(cut, name).shape == (3, N_TOPICS)
