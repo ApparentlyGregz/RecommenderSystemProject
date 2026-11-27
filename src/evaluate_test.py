@@ -35,7 +35,7 @@ import pandas as pd
 import torch
 
 from src.build_graph import Cut, build_cut
-from src.config import ARTIFACTS, EVENTS_FILE, ROOT, SEED, TOPICS_FILE
+from src.config import ARTIFACTS, EVENTS_FILE, LABEL, ROOT, SEED, TOPICS_FILE
 from src.evaluate import baseline_scores, bootstrap_gap, evaluate_scores, recent_activity_scores
 from src.model import GraphTensors, ReviseMalin
 
@@ -73,8 +73,11 @@ def load_model(path: Path, n_users: int, n_topics: int) -> tuple[str, ReviseMali
     model = ReviseMalin(
         n_users, n_topics, dim=cfg["dim"], n_layers=cfg["layers"],
         use_contrastive=not cfg["no_contrastive"], use_forgetting=not cfg["no_forgetting"],
+        use_topic_bias=cfg.get("topic_bias", False),
     )
-    model.load_state_dict(ckpt["state"])
+    state = dict(ckpt["state"])
+    state.setdefault("topic_bias", torch.zeros(n_topics))  # checkpoints trained before the topic bias existed
+    model.load_state_dict(state)
     model.eval()
     return path.stem.removeprefix("model_"), model
 
@@ -217,6 +220,8 @@ def main() -> None:
     parser.add_argument("--bootstrap", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--out-dir", type=Path, default=ROOT / "reports")
+    parser.add_argument("--label", choices=["above_mean", "any_fail"], default=LABEL,
+                        help="label of the evaluated window (any_fail writes <cut>_results_any_fail.*)")
     args = parser.parse_args()
 
     paths = args.models if args.models else sorted(ARTIFACTS.glob("model_*.pt"))
@@ -226,7 +231,7 @@ def main() -> None:
     start = time.time()
     events = pd.read_parquet(EVENTS_FILE)
     n_users, n_topics = int(events["user"].max()) + 1, len(pd.read_parquet(TOPICS_FILE))
-    cut = build_cut(events, args.cut, n_users, n_topics)
+    cut = build_cut(events, args.cut, n_users, n_topics, rule=args.label)
     order = list(LABELS)
     models = dict(sorted((load_model(p, n_users, n_topics) for p in paths),
                          key=lambda kv: order.index(kv[0]) if kv[0] in order else len(order)))
@@ -239,19 +244,24 @@ def main() -> None:
 
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
                             capture_output=True, text=True).stdout.strip() or "no git"
-    meta = {"cut": args.cut, "commit": commit, "date": time.strftime("%Y-%m-%d %H:%M"),
+    dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", "src"], cwd=ROOT,
+                           capture_output=True, text=True).stdout.strip()
+    if dirty:  # say so, instead of citing a commit that does not hold the code that ran
+        commit += " + uncommitted changes in src/"
+    meta = {"cut": args.cut, "label": args.label, "commit": commit, "date": time.strftime("%Y-%m-%d %H:%M"),
             "models": {n: str(p) for n, p in zip(names, paths)}, "bootstrap": args.bootstrap, "seed": args.seed,
             "seconds": round(time.time() - start, 1)}
-    header = (f"Commit `{commit}`, {meta['date']}. Models: {', '.join(names)}. "
+    header = (f"Commit `{commit}`, {meta['date']}. Label: `{args.label}`. Models: {', '.join(names)}. "
               f"{args.bootstrap} bootstrap resamples, seed {args.seed}.")
 
     md = render_markdown(args.cut, results, names, gaps, floor, params, header)
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    (args.out_dir / f"{args.cut}_results.md").write_text(md, encoding="utf-8")
-    (args.out_dir / f"{args.cut}_results.json").write_text(
+    stem = f"{args.cut}_results" + ("" if args.label == LABEL else f"_{args.label}")
+    (args.out_dir / f"{stem}.md").write_text(md, encoding="utf-8")
+    (args.out_dir / f"{stem}.json").write_text(
         json.dumps(to_json(results, gaps, floor, params, meta), indent=2), encoding="utf-8")
     print(md)
-    print(f"Saved to {args.out_dir / f'{args.cut}_results.md'} and .json")
+    print(f"Saved to {args.out_dir / f'{stem}.md'} and .json")
 
 
 if __name__ == "__main__":

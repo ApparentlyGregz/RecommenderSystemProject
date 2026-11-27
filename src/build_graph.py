@@ -2,8 +2,13 @@
 
 For each student, a cut is a point in time. Everything strictly before it is
 input (graph edges, time gaps, error rates). The window right after it gives
-the labels: topics attempted and failed (positive) or attempted and always
-correct (negative).
+the labels of the topics attempted in it, with one of two rules (config.LABEL):
+
+- "above_mean": positive if the student's error rate on the topic is above their
+  error rate over the whole window ("weaker than usual"), whatever the number of
+  attempts. Official DBE-KT22 results.
+- "any_fail": positive if failed at least once in the window. It grows with how
+  often a topic is shown, so it rewards exposure (Week 3 report).
 
 Cuts are defined on timestamps, not on row positions, so a bundle of questions
 answered at the same moment is never split between input and label.
@@ -15,7 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from src.config import CUTS, MS_PER_DAY, OLD_TOPIC_DAYS, WINDOW
+from src.config import CUTS, LABEL, MS_PER_DAY, OLD_TOPIC_DAYS, WINDOW
 
 
 @dataclass
@@ -122,7 +127,30 @@ def history_inputs(past: pd.DataFrame, t_cut: pd.Series, n_users: int, n_topics:
     }
 
 
-def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int) -> Cut:
+def window_labels(window: pd.DataFrame, rule: str = LABEL) -> pd.DataFrame:
+    """Label of each (user, topic) attempted in a label window.
+
+    Args:
+        window: Events of the label window (user, topic, timestamp, question, correct).
+        rule: "above_mean" or "any_fail" (see the module docstring).
+
+    Returns:
+        DataFrame with user, topic and fail (0/1).
+    """
+    w = window.assign(fail=1 - window["correct"])
+    if rule == "any_fail":
+        return w.groupby(["user", "topic"])["fail"].max().reset_index()
+    if rule == "above_mean":
+        # The student's error rate counts each answer once, even when it has several topics.
+        key = ["user", "timestamp", "question"] if "question" in w else ["user", "timestamp"]
+        mean = w.drop_duplicates(key).groupby("user")["fail"].mean()
+        rate = w.groupby(["user", "topic"])["fail"].mean().reset_index()
+        rate["fail"] = (rate["fail"] > rate["user"].map(mean) + 1e-9).astype(np.int8)
+        return rate
+    raise ValueError(f"Unknown label rule: {rule}")
+
+
+def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int, rule: str = LABEL) -> Cut:
     """Build inputs and labels for one cut.
 
     Args:
@@ -144,7 +172,7 @@ def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int) -> C
     window = events[(events["timestamp"] >= t_start) & (events["timestamp"] < t_end)]
 
     inputs = history_inputs(past, times[name], n_users, n_topics)
-    lab = window.assign(fail=1 - window["correct"]).groupby(["user", "topic"])["fail"].max().reset_index()
+    lab = window_labels(window, rule)
     return Cut(
         name=name,
         n_users=n_users,
@@ -156,9 +184,9 @@ def build_cut(events: pd.DataFrame, name: str, n_users: int, n_topics: int) -> C
     )
 
 
-def load_cuts(events: pd.DataFrame, n_users: int, n_topics: int) -> dict[str, Cut]:
+def load_cuts(events: pd.DataFrame, n_users: int, n_topics: int, rule: str = LABEL) -> dict[str, Cut]:
     """Build the three cuts (train, val, test)."""
-    return {name: build_cut(events, name, n_users, n_topics) for name in CUTS}
+    return {name: build_cut(events, name, n_users, n_topics, rule) for name in CUTS}
 
 
 def window_stats(cut: Cut) -> dict[str, float]:

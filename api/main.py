@@ -4,7 +4,9 @@
 artifacts/serving.npz) to rank the DBE-KT22 knowledge components a student is
 most likely to fail. Feedback sent to /log_interaction ("revised",
 "already_known", "not_useful") is stored in SQLite, and the topic leaves the
-student's list until the feedback is reset.
+student's list until the feedback is reset. /questions serves real DBE-KT22
+questions of a topic and /answer checks and stores an answer; answers given in
+the app move the topic in the next /recommend (src/predict.py, PRIOR_ANSWERS).
 
 Run:
     python run.py                       (API + Streamlit interface)
@@ -17,11 +19,15 @@ import time
 from contextlib import asynccontextmanager
 from typing import Literal
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from api import db
+from src.config import QUESTIONS_FILE
 from src.predict import SERVING_FILE, Predictor
+from src.questions import QuestionBank
 
 
 @asynccontextmanager
@@ -32,6 +38,11 @@ async def lifespan(app: FastAPI):
     """
     path = os.environ.get("REVISE_MALIN_SERVING", str(SERVING_FILE))
     app.state.predictor = Predictor.load(path)
+    pred = app.state.predictor
+    questions = Path(os.environ.get("REVISE_MALIN_QUESTIONS", str(QUESTIONS_FILE)))
+    # Practice mode needs the question text, built locally from the dataset (run.py does it on first launch).
+    app.state.questions = (QuestionBank.load(questions, [pred.topic_label(t) for t in range(pred.n_topics)])
+                           if questions.exists() else None)
     app.state.conn = db.connect()
     yield
     app.state.conn.close()
@@ -51,10 +62,13 @@ class Recommendation(BaseModel):
     score: float
     priority: float = Field(description="Percentile of the topic among all topics for this student (0-100)")
     graph_score: float = Field(description="Part of the score from the graph embeddings (NLGCL)")
+    difficulty_score: float = Field(0.0, description="Part of the score from the learned difficulty of the topic")
     time_score: float = Field(description="Part of the score from the learned time term (beta, half-life)")
     attempts: int
     errors: int
     days_since_practice: float | None
+    session_answers: int = 0
+    session_errors: int = 0
     reason: str
 
 
@@ -66,6 +80,7 @@ class RecommendResponse(BaseModel):
     model: str
     days_ahead: float
     latency_ms: float
+    session_answers: int = Field(0, description="Practice answers given in the app, which move the ranking")
     recommendations: list[Recommendation]
 
 
@@ -75,6 +90,14 @@ class InteractionIn(BaseModel):
     student_id: int = Field(ge=0)
     topic: int = Field(ge=0)
     action: Literal["revised", "already_known", "not_useful"]
+
+
+class AnswerIn(BaseModel):
+    """A practice question answered in the app."""
+
+    student_id: int = Field(ge=0)
+    question: int = Field(ge=0)
+    choice: int = Field(ge=0)
 
 
 def _predictor(request: Request) -> Predictor:
@@ -90,7 +113,8 @@ def _check_student(pred: Predictor, student_id: int) -> None:
 def health(request: Request) -> dict:
     """Liveness check, with the model that is loaded."""
     pred = _predictor(request)
-    return {"status": "ok", "students": pred.n_users, "topics": pred.n_topics, "model": pred.meta}
+    return {"status": "ok", "students": pred.n_users, "topics": pred.n_topics, "model": pred.meta,
+            "practice": request.app.state.questions is not None}
 
 
 @app.get("/recommend", response_model=RecommendResponse)
@@ -106,10 +130,13 @@ def recommend(
     pred = _predictor(request)
     _check_student(pred, student_id)
     hidden = db.dismissed_topics(request.app.state.conn, student_id)
-    recs = pred.recommend(student_id, k=k, days_ahead=days_ahead, practised_only=practised_only, hidden=hidden)
+    session = db.session_by_topic(request.app.state.conn, student_id)
+    recs = pred.recommend(student_id, k=k, days_ahead=days_ahead, practised_only=practised_only, hidden=hidden,
+                          session=session)
     return RecommendResponse(
         student_id=student_id, mode="model", model=pred.meta.get("model", "?"), days_ahead=days_ahead,
         latency_ms=round(1000 * (time.perf_counter() - start), 2),
+        session_answers=len(db.list_answers(request.app.state.conn, student_id)),
         recommendations=[Recommendation(**r) for r in recs],
     )
 
@@ -142,3 +169,41 @@ def interactions(request: Request, student_id: int) -> list[dict]:
 def reset_interactions(request: Request, student_id: int) -> dict:
     """Delete a student's clicks (used to reset the demo)."""
     return {"deleted": db.clear_interactions(request.app.state.conn, student_id)}
+
+
+def _bank(request: Request) -> QuestionBank:
+    bank = request.app.state.questions
+    if bank is None:
+        raise HTTPException(503, "Practice questions are not built: run `python -m src.questions` (needs the dataset).")
+    return bank
+
+
+@app.get("/questions")
+def questions(request: Request, student_id: int = Query(ge=0), topic: int = Query(ge=0),
+              n: int = Query(1, ge=1, le=10)) -> list[dict]:
+    """Real DBE-KT22 questions of a topic to practise, without their answers; ones answered here are skipped."""
+    pred = _predictor(request)
+    _check_student(pred, student_id)
+    if topic >= pred.n_topics:
+        raise HTTPException(422, f"topic must be between 0 and {pred.n_topics - 1}")
+    done = {a["question"] for a in db.list_answers(request.app.state.conn, student_id)}
+    return _bank(request).for_topic(topic, n=n, exclude=done)
+
+
+@app.post("/answer")
+def answer(request: Request, item: AnswerIn) -> dict:
+    """Check a practice answer, store it in SQLite and return the correction."""
+    _check_student(_predictor(request), item.student_id)
+    try:
+        result = _bank(request).check(item.question, item.choice)
+    except KeyError as err:
+        raise HTTPException(422, str(err)) from err
+    row = db.log_answer(request.app.state.conn, item.student_id, item.question, item.choice, result["correct"],
+                        result["topics"])
+    return {**result, "id": row["id"], "created_at": row["created_at"]}
+
+
+@app.delete("/answers/{student_id}")
+def reset_answers(request: Request, student_id: int) -> dict:
+    """Delete a student's practice answers (used to reset the demo)."""
+    return {"deleted": db.clear_answers(request.app.state.conn, student_id)}

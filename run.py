@@ -16,6 +16,29 @@ import uvicorn
 
 ROOT = Path(__file__).resolve().parent
 
+
+def ensure_questions() -> None:
+    """Build the practice questions on first launch (the question text is not in Git).
+
+    Downloads the DBE-KT22 files if needed (scripts/download_dbe_kt22.py, about 17 MB),
+    then writes data/processed/questions.parquet. Without network the app still runs,
+    without the practice mode.
+    """
+    from src.config import QUESTIONS_FILE
+
+    if QUESTIONS_FILE.exists():
+        return
+    raw = ROOT / "data" / "raw" / "dbe-kt22"
+    try:
+        if not (raw / "Questions.csv").exists() or not (raw / "Question_Choices.csv").exists():
+            print("First launch: downloading the DBE-KT22 questions for the practice mode...")
+            subprocess.run([sys.executable, str(ROOT / "scripts" / "download_dbe_kt22.py")], check=True)
+        subprocess.run([sys.executable, "-m", "src.questions"], cwd=ROOT, check=True)
+    except (subprocess.CalledProcessError, OSError) as err:
+        print(f"Practice mode disabled ({err}). Recommendations still work; "
+              "run `python scripts/download_dbe_kt22.py` then `python -m src.questions` to enable it.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--api-only", action="store_true")
@@ -26,6 +49,7 @@ if __name__ == "__main__":
     os.chdir(ROOT)  # so "api.main" imports and data/feedback.db is found from any working directory
     sys.path.insert(0, str(ROOT))
     host = "0.0.0.0" if args.lan else "127.0.0.1"
+    ensure_questions()
 
     ui = None
     if not args.api_only:
