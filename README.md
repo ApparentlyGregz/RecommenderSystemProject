@@ -2,7 +2,7 @@
 
 Révise Malin ranks the course notions a student is most likely to fail next, so they revise those first. It combines a graph recommender (NLGCL, RecSys 2025) with a learned time term, trained on **DBE-KT22**, the answers of Database Systems students of the Australian National University to 212 exercises tagged with 93 knowledge components ("Projection", "Normalisation", "Transactions"...).
 
-Team: Grégoire Champourlier, Maxence Simonet, Hippolyte Nussbaumer, Dan Waintraub (ECE Paris, ING5 Data & AI).
+Team: Grégoire Champourlier, Maxence Simonet, Hippolyte Nussbaumer, Dan Waintraub, Martin Mialaret (ECE Paris, ING5 Data & AI).
 
 **Status (Week 4, showcase):** the trained model is served end to end. The Streamlit interface calls the FastAPI backend, the API ranks notions with the trained model (no mocks, about 1 ms per request), students practise on real DBE-KT22 questions whose answers move the ranking, and everything they do is stored in SQLite.
 
@@ -75,7 +75,8 @@ Each model ranks only the notions the student attempted in the test window. **A 
 What we take from it:
 
 - The full model beats every baseline on NDCG@10, including the notion difficulty (+0.019, 95% interval [+0.008, +0.030]) and most-popular (+0.107). The difficulty baseline stays ahead on Recall@5.
-- **With the corrected label the time term is learned the right way round**: β = +0.049 (median half-life 6.9 days), so a notion gets riskier the longer it has not been practised. With "failed at least once" β came out negative (-0.025): recency then meant "the chapter the student is drilling now". The time term adds +0.010 validation NDCG@10 (0.723 vs 0.713, three seeds); on test the four variants are within 0.002.
+- **With the corrected label the time term is learned the right way round**: β = +0.049 (median half-life 6.9 days), so a notion gets riskier the longer it has not been practised. With "failed at least once" β came out negative (-0.025): recency then meant "the chapter the student is drilling now". The time term adds +0.010 validation NDCG@10 (0.723 vs 0.713, three seeds); on test the four variants are within 0.003.
+- **The time term does not help on old notions.** On failed notions not practised for more than 14 days, Recall@10 drops from 0.789 (NLGCL, no time term) to 0.690 with it (gap -0.099, 95% interval [-0.155, -0.051], seed 42). The learned value for a never-practised notion (+0.20) is four times the largest forgetting effect (beta = +0.049), so the time term mostly ranks new notions first. Balancing the two is the next step.
 - Every model has a learned difficulty per notion (a topic bias: +0.006 validation NDCG@10 for the full model, 0.723 vs 0.716 over three seeds). The contrastive loss adds nothing measurable here.
 - Recall@20 is about 0.99 for every method (median 17 candidates per window), so it is reported but not used to compare models.
 - With the old label (`reports/test_results_any_fail.md`) the full model reaches 0.781 NDCG@10 against 0.749 for most-popular.
@@ -121,7 +122,9 @@ tests/      pytest suite
 
 ## Data licence and references
 
-DBE-KT22 is published by the Australian National University on the Australian Data Archive ([doi:10.26193/6DZWOH](https://doi.org/10.26193/6DZWOH)), free to use with citation: Abdelrahman et al., *DBE-KT22: A Knowledge Tracing Dataset Based on Online Student Evaluation*, 2022 ([arXiv:2208.12651](https://arxiv.org/abs/2208.12651)). The download script uses a public mirror of the same files on [Hugging Face](https://huggingface.co/datasets/Unggi/dbe-kt22_raw_data). We use it for coursework only.
+DBE-KT22: Abdelrahman, Abdelfattah, Wang and Lin, *Database Exercises for Knowledge Tracing (DBE-KT22)*, 2022, Australian Data Archive, [doi:10.26193/6DZWOH](https://doi.org/10.26193/6DZWOH), with the paper *DBE-KT22: A Knowledge Tracing Dataset Based on Online Student Evaluation* ([arXiv:2208.12651](https://arxiv.org/abs/2208.12651)). We acknowledge the authors and the Australian Data Archive; they bear no responsibility for our analysis or its interpretation.
+
+The data is **not** under an open licence. The archive's terms of use allow analytical, non-commercial use and the publication of outputs (statistics, tables, graphs), and forbid giving other people access to the data, in whole or in part. Get the files from the [archive page](https://doi.org/10.26193/6DZWOH) yourself. The download script uses a third-party mirror on [Hugging Face](https://huggingface.co/datasets/Unggi/dbe-kt22_raw_data) for convenience; `artifacts/serving.npz` still contains per-student counts and the notion names and descriptions, which the terms may not allow us to publish (open point for the team). We use the data for coursework only.
 
 - Xu et al., *NLGCL: Naturally Existing Neighbor Layers Graph Contrastive Learning for Recommendation*, RecSys 2025 ([code](https://github.com/Jinfeng-Xu/NLGCL)).
 - He et al., *LightGCN*, SIGIR 2020.

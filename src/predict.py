@@ -10,8 +10,9 @@ every request, the score of the trained model:
 The embeddings are fixed (propagated once at export time). The time term is
 cheap, so the API can move time forward ("what if I revise in 10 days?").
 beta is learned: beta > 0 means a topic gets riskier as it is forgotten, beta < 0
-means the topics practised right now are the ones failed next. On DBE-KT22 the
-model learned beta < 0, and the explanations say so instead of talking about forgetting.
+means the topics practised right now are the ones failed next. With the corrected
+label ("weaker than usual") the served model learned beta > 0 (about +0.05, median
+half-life about 7 days); the explanations follow the sign of beta.
 Only numpy is needed, so the API does not import PyTorch.
 
 Answers given in the app update the ranking with a simple, documented rule (not
@@ -192,11 +193,11 @@ class Predictor:
         a, f = int(self.attempts[user, topic]), int(self.fails[user, topic])
         parts = []
         if a == 0:
-            parts.append("Not practised yet: the model gives new topics a learned prior risk")
+            parts.append("Not practised yet: the model gives new notions a learned prior risk")
         else:
             parts.append(f"{f} error{'s' * (f != 1)} in {a} answer{'s' * (a != 1)} ({100 * f / a:.0f}%)")
         if graph_vs_median > 0:
-            parts.append("students who fail the same topics as you often fail this one too")
+            parts.append("students who fail the same notions as you often fail this one too")
         if self.use_forgetting and not np.isnan(dt):
             if self.beta > 0:
                 h = float(self.half_life[topic])
@@ -207,7 +208,7 @@ class Predictor:
                     parts.append(f"last practised {dt:.1f} days ago, about {forgotten:.0f}% forgotten "
                                  f"(half-life {h:.1f} days)")
             elif dt < 1:
-                parts.append("practised in the last day: topics you are working on now are the ones failed next")
+                parts.append("practised in the last day: notions you are working on now are the ones failed next")
             else:
                 parts.append(f"last practised {dt:.0f} days ago")
         return "; ".join(parts) + "."

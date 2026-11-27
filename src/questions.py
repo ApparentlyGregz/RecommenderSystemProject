@@ -3,8 +3,8 @@
 The text is split into blocks the interface can render without external images:
 HTML as it is, and the relational algebra that DBE-KT22 draws with codecogs
 images as LaTeX. Some questions use tables from the course worksheet that the
-dataset does not include; they are flagged (self_contained = False) so the app
-shows them last, with a note.
+dataset does not include; they are flagged (self_contained = False) and the app
+does not offer them, since they cannot be answered without those tables.
 
 The question text stays local (data/processed/questions.parquet, not in Git):
 it is built from the raw DBE-KT22 files, which `run.py` downloads on first use.
@@ -107,9 +107,22 @@ class QuestionBank:
     def load(cls, path: Path, topic_names: list[str]) -> "QuestionBank":
         return cls(pd.read_parquet(path), topic_names)
 
-    def for_topic(self, topic: int, n: int = 1, exclude: set[int] = frozenset()) -> list[dict]:
-        """Questions of a topic, self-contained and easier ones first; no correct answer included."""
+    def _pool(self, topic: int, exclude: set[int], include_context: bool) -> pd.DataFrame:
         pool = self.q[self.q["topics_list"].map(lambda ts: topic in ts) & ~self.q["question"].isin(exclude)]
+        return pool if include_context else pool[pool["self_contained"]]
+
+    def count_for_topic(self, topic: int, exclude: set[int] = frozenset()) -> int:
+        """Number of self-contained questions of a topic left to practise (worksheet questions not counted)."""
+        return len(self._pool(topic, exclude, include_context=False))
+
+    def for_topic(self, topic: int, n: int = 1, exclude: set[int] = frozenset(),
+                  include_context: bool = False) -> list[dict]:
+        """Questions of a topic, easier ones first; no correct answer included.
+
+        Questions that need the course worksheet tables (not in DBE-KT22) cannot be answered,
+        so they are left out unless include_context is True; they then come last.
+        """
+        pool = self._pool(topic, exclude, include_context)
         pool = pool.assign(needs_context=~pool["self_contained"]).sort_values(["needs_context", "difficulty", "question"])
         return [{
             "question": int(r.question), "title": r.title, "blocks": r.blocks_list, "difficulty": int(r.difficulty),

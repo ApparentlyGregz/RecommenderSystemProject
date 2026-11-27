@@ -60,11 +60,25 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
-def test_questions_hide_answers_and_prefer_self_contained(client):
+def test_questions_hide_answers_and_skip_worksheet_questions(client):
     assert client.get("/health").json()["practice"] is True
     qs = client.get("/questions", params={"student_id": 3, "topic": 4, "n": 2}).json()
-    assert [q["question"] for q in qs] == [2, 1] and qs[1]["needs_context"] is True
+    assert [q["question"] for q in qs] == [2]  # question 1 needs the course worksheet: not offered
     assert all("is_correct" not in c for q in qs for c in q["choices"])
+    both = client.get("/questions", params={"student_id": 3, "topic": 4, "n": 2, "include_context": True}).json()
+    assert [q["question"] for q in both] == [2, 1] and both[1]["needs_context"] is True
+
+
+def test_recommend_says_how_many_questions_can_be_practised(client):
+    def counts():
+        recs = client.get("/recommend", params={"student_id": 3, "k": N_TOPICS}).json()["recommendations"]
+        return {r["topic"]: r["practice_questions"] for r in recs}
+
+    before = counts()
+    assert before[4] == 1 and before[5] == 1 and before[0] == 0  # topic 4: question 1 needs the worksheet
+    client.post("/answer", json={"student_id": 3, "question": 2, "choice": 11})
+    after = counts()
+    assert after[4] == 0 and after[5] == 0  # answered here, nothing left to practise
 
 
 def test_answer_is_checked_stored_and_moves_the_topic(client):

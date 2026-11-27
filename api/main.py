@@ -70,6 +70,8 @@ class Recommendation(BaseModel):
     session_answers: int = 0
     session_errors: int = 0
     reason: str
+    practice_questions: int = Field(0, description="Self-contained practice questions of the topic left for this "
+                                                   "student (0 when the questions need the course worksheet)")
 
 
 class RecommendResponse(BaseModel):
@@ -133,6 +135,11 @@ def recommend(
     session = db.session_by_topic(request.app.state.conn, student_id)
     recs = pred.recommend(student_id, k=k, days_ahead=days_ahead, practised_only=practised_only, hidden=hidden,
                           session=session)
+    bank = request.app.state.questions
+    if bank is not None:
+        done = {a["question"] for a in db.list_answers(request.app.state.conn, student_id)}
+        for r in recs:
+            r["practice_questions"] = bank.count_for_topic(r["topic"], exclude=done)
     return RecommendResponse(
         student_id=student_id, mode="model", model=pred.meta.get("model", "?"), days_ahead=days_ahead,
         latency_ms=round(1000 * (time.perf_counter() - start), 2),
@@ -180,14 +187,17 @@ def _bank(request: Request) -> QuestionBank:
 
 @app.get("/questions")
 def questions(request: Request, student_id: int = Query(ge=0), topic: int = Query(ge=0),
-              n: int = Query(1, ge=1, le=10)) -> list[dict]:
+              n: int = Query(1, ge=1, le=10),
+              include_context: bool = Query(False, description="Also return questions that need the course "
+                                                                "worksheet tables, which DBE-KT22 does not include")
+              ) -> list[dict]:
     """Real DBE-KT22 questions of a topic to practise, without their answers; ones answered here are skipped."""
     pred = _predictor(request)
     _check_student(pred, student_id)
     if topic >= pred.n_topics:
         raise HTTPException(422, f"topic must be between 0 and {pred.n_topics - 1}")
     done = {a["question"] for a in db.list_answers(request.app.state.conn, student_id)}
-    return _bank(request).for_topic(topic, n=n, exclude=done)
+    return _bank(request).for_topic(topic, n=n, exclude=done, include_context=include_context)
 
 
 @app.post("/answer")
