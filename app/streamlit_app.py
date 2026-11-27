@@ -68,32 +68,75 @@ def render_question(q: dict) -> None:
             st.markdown(block["content"], unsafe_allow_html=True)
 
 
-def practice_panel(student_id: int, topic: int, label: str) -> None:
-    """One practice question of a notion, its answer choices, and the check that stores the answer."""
-    if "practice_q" not in st.session_state:
+def full_ranks(student_id: int, days_ahead: float, practised_only: bool) -> dict[int, int]:
+    """Rank of every notion in the student's current list (top 50), to show how an answer moved them."""
+    res = api_get("/recommend", student_id=student_id, k=50, days_ahead=days_ahead, practised_only=practised_only)
+    return {r["topic"]: r["rank"] for r in res["recommendations"]}
+
+
+def rank_word(rank: int | None) -> str:
+    return f"#{rank}" if rank else "beyond #50"
+
+
+@st.dialog("Practice", width="large")
+def practice_dialog(student_id: int, topic: int, label: str, k: int, days_ahead: float, practised_only: bool) -> None:
+    """A practice question in a window over the list: answer, correction, how the list moved, next question."""
+    state = st.session_state.setdefault("dialog", {})
+    if state.get("topic") != topic or state.get("student") != student_id:
+        state.clear()
+        state.update(topic=topic, student=student_id)
+    if "question" not in state:
         qs = api_get("/questions", student_id=student_id, topic=topic, n=1)
-        st.session_state.practice_q = qs[0] if qs else None
-    q = st.session_state.practice_q
+        state["question"] = qs[0] if qs else None
+    st.subheader(label)
+    q = state["question"]
     if q is None:
-        st.info(f"No other practice question left for {label} in this session.")
-        return
-    st.markdown(f"**Question {q['question']}** · difficulty {q['difficulty']}/3 · notions: "
-                + ", ".join(t["label"] for t in q["topics"]))
-    render_question(q)
-    text_of = {c["id"]: c["text"] for c in q["choices"]}
-    choice = st.radio("Your answer", list(text_of), index=None, format_func=text_of.get,
-                      key=f"choice-{q['question']}")
-    c1, c2 = st.columns([1, 3])
-    if c1.button("Check my answer", key=f"check-{q['question']}", disabled=choice is None):
-        result = api_post("/answer", json={"student_id": student_id, "question": q["question"], "choice": choice})
-        st.session_state.last_answer = {"result": result, "question": q, "topic": topic, "label": label,
-                                        "chosen": text_of[choice]}
-        for key in ("practice_topic", "practice_label", "practice_q"):
-            st.session_state.pop(key, None)
+        st.info(f"No other practice question left for {label}.")
+    else:
+        st.caption(f"Question {q['question']} · difficulty {q['difficulty']}/3 · notions: "
+                   + ", ".join(t["label"] for t in q["topics"]))
+        render_question(q)
+        text_of = {c["id"]: c["text"] for c in q["choices"]}
+        done = "result" in state
+        choice = st.radio("Your answer", list(text_of), index=None, format_func=text_of.get,
+                          key=f"dlg-choice-{q['question']}", disabled=done)
+        if not done:
+            c1, c2 = st.columns([1, 2])
+            if c1.button("Check my answer", type="primary", disabled=choice is None):
+                before = full_ranks(student_id, days_ahead, practised_only)
+                state["result"] = api_post("/answer", json={"student_id": student_id, "question": q["question"],
+                                                            "choice": choice})
+                after = full_ranks(student_id, days_ahead, practised_only)
+                state["moves"] = [(t["label"], before.get(t["topic"]), after.get(t["topic"])) for t in q["topics"]]
+                st.rerun(scope="fragment")
+            if q["hint"]:
+                with c2.expander("Hint"):
+                    st.write(q["hint"])
+        else:
+            a = state["result"]
+            good = [c["text"] for c in q["choices"] if c["id"] in a["correct_choices"]]
+            if a["correct"]:
+                st.success("Correct.")
+            else:
+                st.error(f"Not quite. The correct answer: {' / '.join(good)}.")
+            if a["explanation"]:
+                st.info(a["explanation"])
+            moves = []
+            for name, old, new in state["moves"]:
+                out = (" (leaves your list)" if old and old <= k and (new is None or new > k)
+                       else " (enters your list)" if new and new <= k and (old is None or old > k) else "")
+                moves.append(f"**{name}**: {rank_word(old)} → {rank_word(new)}{out}")
+            st.markdown("Your list moved:  \n" + "  \n".join(moves))
+            st.session_state.toast = " · ".join(f"{n}: {rank_word(o)} → {rank_word(w)}"
+                                                for n, o, w in state["moves"])
+    left, right = st.columns(2)
+    if q is not None and "result" in state and left.button(f"Another question on {label}", type="primary"):
+        state.pop("question", None)
+        state.pop("result", None)
+        st.rerun(scope="fragment")
+    if right.button("Back to my list"):
+        state.clear()
         st.rerun()
-    if q["hint"]:
-        with c2.expander("Hint"):
-            st.write(q["hint"])
 
 
 health = api_get("/health")
@@ -109,7 +152,7 @@ if st.sidebar.button("🎲 Random student"):
     st.session_state.student = random.randrange(n_students)
 student = st.sidebar.number_input(f"Student (0 to {n_students - 1})", 0, n_students - 1, key="student")
 if st.session_state.get("shown_student") != student:  # new student: close any open question
-    for key in ("practice_topic", "practice_label", "practice_q", "last_answer"):
+    for key in ("dialog", "toast"):
         st.session_state.pop(key, None)
     st.session_state.shown_student = student
 k = st.sidebar.slider("Notions to show", 5, 20, 10)
@@ -146,37 +189,11 @@ recs = pd.DataFrame(res["recommendations"])
 st.subheader("Notions to revise first")
 st.caption(f"Ranked by the trained model ({res['model']}), answered in {res['latency_ms']} ms. "
            "Score = graph part (students who fail the same notions) + difficulty of the notion + time part "
-           "(when you last practised it). Practise a notion: each answer moves it, up if wrong, down if right.")
+           "(when you last practised it). Practise a notion: the question opens in a window, and each answer "
+           "moves the notion, up if wrong, down if right.")
 
-last = st.session_state.get("last_answer")
-if last:  # correction of the last practice answer, shown here because the ranking may have moved the notion
-    with st.container(border=True):
-        a, q = last["result"], last["question"]
-        st.markdown(f"**Your answer to question {q['question']}** ({last['label']}): {last['chosen']}")
-        good = [c["text"] for c in q["choices"] if c["id"] in a["correct_choices"]]
-        if a["correct"]:
-            st.success("Correct: this notion moves down your list, and can leave it.")
-        else:
-            st.error(f"Not quite. The correct answer: {' / '.join(good)}. This notion moves up your list.")
-        if a["explanation"]:
-            st.info(a["explanation"])
-        n1, n2 = st.columns(2)
-        if n1.button(f"Another question on {last['label']}", type="primary"):
-            st.session_state.practice_topic = last["topic"]
-            st.session_state.practice_label = last["label"]
-            st.session_state.pop("last_answer")
-            st.rerun()
-        if n2.button("Close"):
-            st.session_state.pop("last_answer")
-            st.rerun()
-
-# A notion can leave the list after a right answer: its next question is then shown here, above the list.
-shown = {r["topic"] for r in res["recommendations"]}
-if st.session_state.get("practice_topic") is not None and st.session_state.practice_topic not in shown:
-    with st.container(border=True):
-        practice_label = st.session_state.get("practice_label", "this notion")
-        st.markdown(f"**Practice · {practice_label}** (no longer in your top {k})")
-        practice_panel(int(student), st.session_state.practice_topic, practice_label)
+if st.session_state.get("toast"):  # back from a practice window: how the answer moved the list
+    st.toast(st.session_state.pop("toast"), icon="📝")
 
 if recs.empty:
     st.info("No notion left: every notion got feedback. Reset the feedback below.")
@@ -199,10 +216,7 @@ else:
                     st.caption("Related notions: " + ", ".join(r["related"]))
             if health.get("practice") and r.get("practice_questions", 0) > 0:
                 if right.button("📝 Practise this notion", key=f"practise-{r['topic']}", type="primary"):
-                    st.session_state.practice_topic = r["topic"]
-                    st.session_state.practice_label = r["label"]
-                    st.session_state.pop("practice_q", None)
-                    st.session_state.pop("last_answer", None)
+                    practice_dialog(int(student), r["topic"], r["label"], k, days_ahead, practised_only)
             elif health.get("practice"):
                 right.caption("No practice question available for this notion: its DBE-KT22 questions need the "
                               "course worksheet tables, which the dataset does not include (or you answered them all).")
@@ -211,9 +225,6 @@ else:
                 if col.button(label, key=f"{action}-{r['topic']}"):
                     api_send("POST", "/log_interaction",
                              json={"student_id": int(student), "topic": r["topic"], "action": action})
-
-            if st.session_state.get("practice_topic") == r["topic"]:
-                practice_panel(int(student), r["topic"], r["label"])
 
 # ---------- Feedback stored in the database ----------
 st.subheader("Your feedback (stored in SQLite)")
