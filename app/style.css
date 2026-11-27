@@ -1,0 +1,68 @@
+/* Révise Malin: ink on exam paper, one highlighter.
+   Ink #1B2A4A, graphite #5E6B82, rule #DCE3EC, paper #F6F8FB, highlighter #FFE14D.
+   Loaded by app/streamlit_app.py; colours and fonts of the widgets come from .streamlit/config.toml. */
+
+:root {
+  --rm-ink: #1B2A4A;
+  --rm-graphite: #5E6B82;
+  --rm-rule: #DCE3EC;
+  --rm-highlight: 255, 225, 77;
+}
+
+/* Page: one readable column, aligned left */
+.block-container { max-width: 1100px; padding-top: 2.2rem; padding-bottom: 4rem; }
+h1, h2, h3 { letter-spacing: -0.02em; }
+
+/* Brand in the sidebar: the name is the only thing highlighted there */
+.rm-brand {
+  font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 2rem;
+  line-height: 1.05; letter-spacing: -0.03em; color: var(--rm-ink); margin: 0.2rem 0 0.5rem;
+}
+.rm-brand mark {
+  color: inherit; padding: 0 0.06em;
+  background: linear-gradient(transparent 56%, rgb(var(--rm-highlight)) 56%, rgb(var(--rm-highlight)) 92%, transparent 92%);
+}
+.rm-tagline { color: var(--rm-graphite); font-size: 0.95rem; line-height: 1.45; margin-bottom: 0.4rem; }
+.rm-footnote { color: var(--rm-graphite); font-size: 0.8rem; line-height: 1.5; }
+
+/* Student header */
+.rm-profile { color: var(--rm-graphite); font-size: 1.05rem; line-height: 1.5; margin: -0.4rem 0 0.6rem; }
+.rm-profile b { color: var(--rm-ink); font-weight: 700; }
+.rm-lead { color: var(--rm-graphite); font-size: 0.98rem; line-height: 1.5; max-width: 70ch; margin: -0.3rem 0 0.4rem; }
+
+/* The ranked list: rows on ruled paper, no boxes */
+[class*="st-key-row-"] { border-top: 1px solid var(--rm-rule); padding: 1.15rem 0 0.9rem; }
+.rm-rank {
+  font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 2.5rem; line-height: 0.95;
+  color: var(--rm-ink); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.rm-name {
+  font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 1.4rem; line-height: 1.25;
+  color: var(--rm-ink);
+}
+/* The highlighter: its strength is the notion's priority (--a, set per row) */
+.rm-name span {
+  padding: 0 0.12em; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  background: linear-gradient(transparent 54%, rgba(var(--rm-highlight), var(--a)) 54%,
+                              rgba(var(--rm-highlight), var(--a)) 94%, transparent 94%);
+}
+.rm-meta { display: flex; flex-wrap: wrap; gap: 0.2rem 1.4rem; margin-top: 0.4rem; font-size: 0.98rem; color: var(--rm-ink); }
+.rm-meta .rm-quiet { color: var(--rm-graphite); }
+.rm-why { color: var(--rm-graphite); font-size: 0.95rem; line-height: 1.5; margin-top: 0.35rem; max-width: 66ch; }
+.rm-none { color: var(--rm-graphite); font-size: 0.85rem; line-height: 1.45; padding-top: 0.35rem; }
+
+/* Practice window */
+.rm-moves { margin: 0.2rem 0 0.4rem; line-height: 1.7; }
+.rm-moves b { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; }
+.rm-up { color: #B42318; }
+.rm-down { color: #1F7A4D; }
+
+/* Keyboard focus stays visible on every control */
+button:focus-visible, [role="radio"]:focus-visible, input:focus-visible {
+  outline: 2px solid var(--rm-ink) !important; outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .rm-rank { font-size: 1.8rem; text-align: left; }
+  .rm-name { font-size: 1.2rem; }
+}
