@@ -2,8 +2,8 @@
   "meta": {
     "cut": "test",
     "label": "above_mean",
-    "commit": "feba0a8 + uncommitted changes in src/",
-    "date": "2026-11-27 09:54",
+    "commit": "f2876a3",
+    "date": "2026-11-27 09:58",
     "models": {
       "full": "artifacts\\model_full.pt",
       "cl_noforget": "artifacts\\model_cl_noforget.pt",

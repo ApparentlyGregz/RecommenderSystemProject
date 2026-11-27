@@ -1,6 +1,6 @@
 # Results on the test cut
 
-Commit `feba0a8 + uncommitted changes in src/`, 2026-11-27 09:54. Label: `any_fail`. Models: full, cl_noforget, nocl_forget, nocl_noforget. 1000 bootstrap resamples, seed 42.
+Commit `f2876a3`, 2026-11-27 09:58. Label: `any_fail`. Models: full, cl_noforget, nocl_forget, nocl_noforget. 1000 bootstrap resamples, seed 42.
 
 Eligible students: 703 (102 with a failed topic not practised for > 14 days).
 

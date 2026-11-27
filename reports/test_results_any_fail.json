@@ -2,8 +2,8 @@
   "meta": {
     "cut": "test",
     "label": "any_fail",
-    "commit": "feba0a8 + uncommitted changes in src/",
-    "date": "2026-11-27 09:54",
+    "commit": "f2876a3",
+    "date": "2026-11-27 09:58",
     "models": {
       "full": "artifacts\\model_full.pt",
       "cl_noforget": "artifacts\\model_cl_noforget.pt",
@@ -12,7 +12,7 @@
     },
     "bootstrap": 1000,
     "seed": 42,
-    "seconds": 0.8
+    "seconds": 0.7
   },
   "metrics": {
     "random": {
