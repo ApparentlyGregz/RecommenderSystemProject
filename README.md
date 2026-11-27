@@ -76,7 +76,7 @@ What we take from it:
 
 - The full model beats every baseline on NDCG@10, including the notion difficulty (+0.019, 95% interval [+0.008, +0.030]) and most-popular (+0.107). The difficulty baseline stays ahead on Recall@5.
 - **With the corrected label the time term is learned the right way round**: β = +0.049 (median half-life 6.9 days), so a notion gets riskier the longer it has not been practised. With "failed at least once" β came out negative (-0.025): recency then meant "the chapter the student is drilling now". The time term adds +0.010 validation NDCG@10 (0.723 vs 0.713, three seeds); on test the four variants are within 0.002.
-- Every model has a learned difficulty per notion (a topic bias, +0.015 validation NDCG@10). The contrastive loss adds nothing measurable here.
+- Every model has a learned difficulty per notion (a topic bias: +0.006 validation NDCG@10 for the full model, 0.723 vs 0.716 over three seeds). The contrastive loss adds nothing measurable here.
 - Recall@20 is about 0.99 for every method (median 17 candidates per window), so it is reported but not used to compare models.
 - With the old label (`reports/test_results_any_fail.md`) the full model reaches 0.781 NDCG@10 against 0.749 for most-popular.
 
