@@ -11,7 +11,7 @@ The report answers two Week 3 questions:
         answered most often before the cut) on NDCG@10 and Recall@20? "Yes"
         needs the lower bound of the 95% bootstrap interval of the gap to be above 0.
         Two harder references are also reported: personal error rate and recent
-        activity (answers per topic in the student's last 100).
+        activity (answers per topic in the student's last WINDOW answers).
     Q4 (innovation proof): the full model against each ablation, on the main
         metrics and on Recall@10 for topics not practised for > 14 days.
 
@@ -49,7 +49,7 @@ LABELS = {
     "most_popular": "Most-popular (attempt frequency)",
     "global_error": "Global error rate",
     "personal_error": "Personal error rate",
-    "recent_activity": "Recent activity (answers in the last 100)",
+    "recent_activity": "Recent activity (answers in the last window)",
     "full": "Full model (NLGCL + forgetting)",
     "cl_noforget": "NLGCL, no forgetting",
     "nocl_forget": "LightGCN + forgetting",
@@ -155,7 +155,7 @@ def forgetting_params(models: dict[str, ReviseMalin]) -> dict[str, dict]:
         if model.use_forgetting:
             h = model.half_life().detach().numpy()
             out[name] = {
-                "beta": float(model.beta), "unseen": float(model.unseen),
+                "beta": float(model.beta.detach()), "unseen": float(model.unseen.detach()),
                 "half_life_days_median": float(np.median(h)),
                 "half_life_days_p10": float(np.percentile(h, 10)),
                 "half_life_days_p90": float(np.percentile(h, 90)),

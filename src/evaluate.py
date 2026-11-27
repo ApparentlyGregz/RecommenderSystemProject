@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 from src.build_graph import Cut, cut_times, load_cuts
-from src.config import EVENTS_FILE, OLD_TOPIC_DAYS, SEED, TOPICS_FILE
+from src.config import EVENTS_FILE, OLD_TOPIC_DAYS, SEED, TOPICS_FILE, WINDOW
 
 
 def ndcg_at_k(rel_in_rank_order: np.ndarray, k: int) -> float:
@@ -102,7 +102,7 @@ def baseline_scores(cut: Cut, name: str, seed: int = SEED) -> np.ndarray:
     raise ValueError(f"Unknown baseline: {name}")
 
 
-def recent_activity_scores(events: pd.DataFrame, cut: Cut, window: int = 100) -> np.ndarray:
+def recent_activity_scores(events: pd.DataFrame, cut: Cut, window: int = WINDOW) -> np.ndarray:
     """Baseline: answers per topic in each student's last `window` answers strictly before the cut.
 
     It only uses the past, but it captures which topics the student is working on

@@ -1,156 +1,113 @@
-"""EdNet-KT1 + Contents -> one Parquet table of (answer, topic) events.
+"""DBE-KT22 -> one Parquet table of (answer, knowledge component) events.
+
+DBE-KT22 (Abdelrahman et al., 2022) holds the answers of students of the
+Database Systems course of the Australian National University (2019-2022) to
+212 multiple-choice questions, each linked to one or more knowledge components
+(KCs: "Normalisation", "Functional dependency", "SQL join"...). A KC is a
+"topic" of Révise Malin: the thing a student should revise.
 
 Steps:
-    1. Pick students at random among those with at least MIN_ANSWERS answers.
-       File sizes from the zip index pre-filter short students without unzipping.
-    2. Join answers with questions.csv to compute correct = user_answer == correct_answer.
-    3. Explode tags: one row per (answer, topic). Tag -1 (no tag) is dropped.
-    4. Save data/processed/events.parquet, topics.parquet and stats.json.
+    1. Read Transaction.csv: one row per answer, answer_state = correct or not.
+    2. Keep students with at least MIN_ANSWERS answers (the three label windows need history).
+    3. Join Question_KC_Relationships.csv: one row per (answer, KC).
+    4. Index answers from the end of each student's history (answer_idx 0 = last answer).
+    5. Save data/processed/events.parquet, topics.parquet (KC names, descriptions,
+       prerequisites) and stats.json.
 
 Usage:
-    python -m src.prepare_data --kt1 data/raw/EdNet-KT1.zip --questions data/raw/contents/questions.csv
+    python -m src.prepare_data                       # reads data/raw/dbe-kt22/
+    python -m src.prepare_data --raw path/to/dbe-kt22
 """
 from __future__ import annotations
 
 import argparse
-import io
 import json
-import re
 import time
-import zipfile
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from src.build_graph import load_cuts, window_stats
-from src.config import (
-    DATA_PROCESSED,
-    EVENTS_FILE,
-    MIN_ANSWERS,
-    N_STUDENTS,
-    SEED,
-    STATS_FILE,
-    TOPICS_FILE,
-)
+from src.config import DATA_PROCESSED, DATA_RAW, EVENTS_FILE, MIN_ANSWERS, STATS_FILE, TOPICS_FILE
 
-MIN_BYTES_PER_LINE = 23  # shortest possible KT1 line, so the size filter never drops a valid student
-USER_RE = re.compile(r"u(\d+)\.csv$")
+RAW_DIR = DATA_RAW / "dbe-kt22"
 
 
-def list_student_files(kt1: Path, zf: zipfile.ZipFile | None) -> list[tuple[str, int]]:
-    """List (name, size in bytes) of every student CSV in the open zip, or in a folder."""
-    if zf is not None:
-        return [(i.filename, i.file_size) for i in zf.infolist() if USER_RE.search(i.filename)]
-    return [(str(p), p.stat().st_size) for p in kt1.rglob("u*.csv")]
+def load_answers(raw: Path) -> pd.DataFrame:
+    """Read Transaction.csv: student, question, time (ms since epoch, UTC) and correctness."""
+    t = pd.read_csv(raw / "Transaction.csv",
+                    usecols=["student_id", "question_id", "start_time", "answer_state", "hint_used"])
+    # Times look like "2019-08-07 17:12:08.722 -0700": parse with their UTC offset.
+    ts = pd.to_datetime(t["start_time"], format="%Y-%m-%d %H:%M:%S.%f %z", utc=True)
+    return pd.DataFrame({
+        "user_id": t["student_id"].astype(np.int64),
+        "question": t["question_id"].astype(np.int32),
+        # Milliseconds since 1970, whatever the internal resolution pandas picked (ns or us).
+        "timestamp": ((ts - pd.Timestamp(0, tz="UTC")) // pd.Timedelta(milliseconds=1)).astype(np.int64),
+        "correct": t["answer_state"].astype(bool).astype(np.int8),
+        "hint_used": t["hint_used"].astype(bool).astype(np.int8),
+    })
 
 
-def read_student(kt1: Path, name: str, zf: zipfile.ZipFile | None) -> pd.DataFrame:
-    """Read one student CSV from the zip or the folder."""
-    if zf is not None:
-        with zf.open(name) as f:
-            return pd.read_csv(io.BytesIO(f.read()))
-    return pd.read_csv(name)
+def load_topics(raw: Path, used_kcs: set[int]) -> pd.DataFrame:
+    """KCs that appear on at least one answered question, with names, descriptions and prerequisites."""
+    kcs = pd.read_csv(raw / "KCs.csv").rename(columns={"id": "kc"})
+    kcs = kcs[kcs["kc"].isin(used_kcs)].sort_values("kc").reset_index(drop=True)
+    kcs["topic"] = np.arange(len(kcs), dtype=np.int16)
+    # KC_Relationships: from -> to. Kept for the interface ("related notions"), not used by the model.
+    rel = pd.read_csv(raw / "KC_Relationships.csv")
+    rel = rel[rel["from_knowledgecomponent_id"].isin(used_kcs) & rel["to_knowledgecomponent_id"].isin(used_kcs)]
+    related = rel.groupby("from_knowledgecomponent_id")["to_knowledgecomponent_id"].apply(
+        lambda s: ";".join(str(int(x)) for x in sorted(set(s))))
+    kcs["related_kcs"] = kcs["kc"].map(related).fillna("")
+    kcs["name"] = kcs["name"].str.strip()
+    kcs["description"] = kcs["description"].fillna("").str.strip()
+    return kcs[["topic", "kc", "name", "description", "related_kcs"]]
 
 
-def load_questions(path: Path) -> pd.DataFrame:
-    """Load questions.csv and keep id, correct answer, part and tags."""
-    q = pd.read_csv(path, usecols=["question_id", "correct_answer", "part", "tags"])
-    return q.dropna(subset=["correct_answer"])
-
-
-def sample_students(kt1: Path, n_students: int, min_answers: int, seed: int) -> pd.DataFrame:
-    """Read random students until n_students with at least min_answers valid answers are found.
+def build_events(answers: pd.DataFrame, raw: Path, min_answers: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Filter students, explode answers into (answer, KC) rows and index them.
 
     Args:
-        kt1: Path to EdNet-KT1.zip or to the unzipped folder.
-        n_students: Target number of students.
+        answers: Output of load_answers.
+        raw: Folder of the raw DBE-KT22 CSV files.
         min_answers: Minimum number of answers per student.
-        seed: Random seed for the sampling order.
 
     Returns:
-        Raw answers of the selected students with a ``user`` column.
+        events (one row per answer and KC) and topics (one row per KC).
     """
-    zf = zipfile.ZipFile(kt1) if kt1.suffix == ".zip" else None
-    kept: list[pd.DataFrame] = []
-    try:
-        files = list_student_files(kt1, zf)
-        min_bytes = min_answers * MIN_BYTES_PER_LINE
-        candidates = [name for name, size in files if size >= min_bytes]
-        del files
-        rng = np.random.default_rng(seed)
-        rng.shuffle(candidates)
-        print(f"{len(candidates):,} student files pass the size pre-filter")
+    counts = answers.groupby("user_id").size()
+    answers = answers[answers["user_id"].isin(counts[counts >= min_answers].index)]
+    answers = answers.sort_values(["user_id", "timestamp", "question"], kind="stable").copy()
+    answers["answer_idx"] = answers.groupby("user_id").cumcount(ascending=False).astype(np.int32)
 
-        for name in candidates:
-            df = read_student(kt1, name, zf).dropna(subset=["user_answer"])
-            if len(df) >= min_answers:
-                df["user"] = int(USER_RE.search(name).group(1))
-                kept.append(df)
-                if len(kept) % 500 == 0:
-                    print(f"  {len(kept):,} students kept")
-                if len(kept) == n_students:
-                    break
-    finally:
-        if zf is not None:
-            zf.close()
-    if len(kept) < n_students:
-        print(f"Warning: only {len(kept)} students have at least {min_answers} answers")
-    return pd.concat(kept, ignore_index=True)
+    q_kc = pd.read_csv(raw / "Question_KC_Relationships.csv")
+    q_kc = q_kc.rename(columns={"question_id": "question", "knowledgecomponent_id": "kc"})[["question", "kc"]]
+    questions = pd.read_csv(raw / "Questions.csv", usecols=["id", "difficulty"]).rename(columns={"id": "question"})
+    ev = answers.merge(q_kc, on="question", how="inner").merge(questions, on="question", how="left")
 
-
-def build_events(answers: pd.DataFrame, questions: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Join, compute correctness, index answers from the end and explode tags.
-
-    Args:
-        answers: Raw KT1 rows with a ``user`` column.
-        questions: Output of load_questions.
-
-    Returns:
-        events (one row per answer and topic) and topics (one row per topic).
-    """
-    df = answers.merge(questions, on="question_id", how="inner")
-    df = df.sort_values(["user", "timestamp", "solving_id"], kind="stable")
-    df["correct"] = (df["user_answer"] == df["correct_answer"]).astype(np.int8)
-    df["answer_idx"] = df.groupby("user").cumcount(ascending=False).astype(np.int32)
-
-    df["tag"] = df["tags"].astype(str).str.split(";")
-    ev = df.explode("tag")
-    ev = ev[ev["tag"].str.fullmatch(r"\d+", na=False)]
-    ev["tag"] = ev["tag"].astype(np.int16)
-
-    topics = (
-        ev.groupby("tag")
-        .agg(main_part=("part", lambda s: int(s.mode().iloc[0])), n_events=("part", "size"))
-        .reset_index()
-        .sort_values("tag")
-        .reset_index(drop=True)
-    )
-    topics["topic"] = np.arange(len(topics), dtype=np.int16)
-    users = np.sort(ev["user"].unique())
-
-    ev["topic"] = ev["tag"].map(dict(zip(topics["tag"], topics["topic"]))).astype(np.int16)
-    ev["user_id"] = ev["user"].astype(np.int64)
-    ev["user"] = ev["user"].map({u: i for i, u in enumerate(users)}).astype(np.int32)
-    ev["question"] = ev["question_id"].str[1:].astype(np.int32)
-    ev["part"] = ev["part"].astype(np.int8)
-    cols = ["user", "user_id", "timestamp", "answer_idx", "question", "part", "topic", "correct"]
-    return ev[cols].reset_index(drop=True), topics
+    topics = load_topics(raw, set(ev["kc"].unique()))
+    topics["n_events"] = topics["kc"].map(ev["kc"].value_counts()).astype(np.int64)
+    ev["topic"] = ev["kc"].map(dict(zip(topics["kc"], topics["topic"]))).astype(np.int16)
+    users = np.sort(ev["user_id"].unique())
+    ev["user"] = ev["user_id"].map({u: i for i, u in enumerate(users)}).astype(np.int32)
+    ev["difficulty"] = ev["difficulty"].fillna(0).astype(np.int8)
+    cols = ["user", "user_id", "timestamp", "answer_idx", "question", "difficulty", "topic", "correct", "hint_used"]
+    ev = ev[cols].sort_values(["user", "timestamp", "question", "topic"], kind="stable").reset_index(drop=True)
+    return ev, topics
 
 
 def main() -> None:
-    """Run the full preprocessing and print the counts used in the Week 2 report."""
+    """Run the preprocessing and print the counts used in the report."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--kt1", type=Path, required=True, help="EdNet-KT1.zip or the unzipped KT1 folder")
-    parser.add_argument("--questions", type=Path, required=True, help="Contents questions.csv")
-    parser.add_argument("--students", type=int, default=N_STUDENTS)
+    parser.add_argument("--raw", type=Path, default=RAW_DIR, help="folder with the DBE-KT22 CSV files")
     parser.add_argument("--min-answers", type=int, default=MIN_ANSWERS)
-    parser.add_argument("--seed", type=int, default=SEED)
     args = parser.parse_args()
 
     start = time.time()
-    answers = sample_students(args.kt1, args.students, args.min_answers, args.seed)
-    events, topics = build_events(answers, load_questions(args.questions))
+    answers = load_answers(args.raw)
+    events, topics = build_events(answers, args.raw, args.min_answers)
 
     DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
     events.to_parquet(EVENTS_FILE, index=False, compression="zstd")
@@ -158,16 +115,20 @@ def main() -> None:
 
     n_users, n_topics = int(events["user"].max()) + 1, len(topics)
     cuts = load_cuts(events, n_users, n_topics)
-    per_student = answers.groupby("user").size()
+    one_per_answer = events.drop_duplicates(["user", "timestamp", "question"])
     stats = {
+        "dataset": "DBE-KT22",
+        "students_in_raw_data": int(answers["user_id"].nunique()),
+        "answers_in_raw_data": int(len(answers)),
         "students": n_users,
-        "answers": int(len(answers)),
+        "answers": int(len(one_per_answer)),
         "events_answer_x_topic": int(len(events)),
         "topics": n_topics,
         "questions_seen": int(events["question"].nunique()),
-        "answers_per_student_median": float(per_student.median()),
-        "overall_error_rate": float(1 - events.drop_duplicates(["user", "timestamp", "question"])["correct"].mean()),
-        "parquet_mb": round(EVENTS_FILE.stat().st_size / 1e6, 2),
+        "answers_per_student_median": float(one_per_answer.groupby("user").size().median()),
+        "overall_error_rate": float(1 - one_per_answer["correct"].mean()),
+        "first_answer": str(pd.to_datetime(events["timestamp"].min(), unit="ms").date()),
+        "last_answer": str(pd.to_datetime(events["timestamp"].max(), unit="ms").date()),
         "seconds": round(time.time() - start, 1),
         "cuts": {name: window_stats(c) for name, c in cuts.items()},
     }

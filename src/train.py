@@ -94,7 +94,7 @@ def train(args: argparse.Namespace) -> dict:
             "train_bpr": float(np.mean(losses)),
             "val_bpr": pair_loss(model, g_val, cuts["val"], rng),
             "val_ndcg@10": val["ndcg@10"],
-            "beta": float(model.beta),
+            "beta": float(model.beta.detach()),
             "median_half_life": float(model.half_life().median()),
             "seconds": round(time.time() - start, 2),
         }
@@ -121,7 +121,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--patience", type=int, default=10)
-    parser.add_argument("--batch", type=int, default=4096)
+    parser.add_argument("--batch", type=int, default=256)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--dim", type=int, default=64)
     parser.add_argument("--layers", type=int, default=2)

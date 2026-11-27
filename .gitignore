@@ -17,3 +17,4 @@ RecSys Papers-20261106/
 Papers summary copy.pdf
 
 data/processed/events.parquet
+data/*.log
